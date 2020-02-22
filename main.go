@@ -16,7 +16,7 @@ type receiver struct {}
 type Input struct {
 	Method	string
 	Public	bool
-	Data	map[string]interface{}
+	Data	[]byte
 	URL	*url.URL
 }
 
@@ -24,7 +24,6 @@ type Output struct {
 	Data interface{}
 	Failed bool
 	CacheControl string
-	ETag string
 }
 
 func (rcvr receiver) answer(w http.ResponseWriter, output Output, pretty bool) {
@@ -55,29 +54,31 @@ func (rcvr receiver) get(w http.ResponseWriter, r *http.Request) (Input, error) 
 	var d Input
 	d.URL = r.URL
 	d.Method = r.Method
-	if r.ContentLength == 0 {
-		return d, fmt.Errorf("No input-data at all.")
+	if r.ContentLength != 0 {
+		d.Data = make([]byte, r.ContentLength)
+
+		if n, err := io.ReadFull(r.Body, d.Data); err != nil {
+			log.WithFields(log.Fields{
+				"address":  r.RemoteAddr,
+				"error":    err,
+				"numbytes": n,
+			}).Error("Read error from client")
+			return d, fmt.Errorf("read failed: %v", err)
+		}
 	}
 
-	b := make([]byte, r.ContentLength)
-
-	if n, err := io.ReadFull(r.Body, b); err != nil {
-		log.WithFields(log.Fields{
-			"address":  r.RemoteAddr,
-			"error":    err,
-			"numbytes": n,
-		}).Error("Read error from client")
-		return d, fmt.Errorf("read failed: %v", err)
-	}
-
-	err := json.Unmarshal(b,&d.Data)
-	
-	if err != nil {
-		return d, fmt.Errorf("Failed to parse json: %w", err)
-	}
 
 	return d, nil
 }
+
+
+var enBox box
+
+
+
+
+
+
 
 type box struct {
 	Sysname string
@@ -85,23 +86,34 @@ type box struct {
 
 func (b *box) Get(element string) (Output, error) {
 	var o Output
-	o.Data = "hi"
-	o.ETag = "kjeks"
+	o.Data = enBox
 	return o,nil	
 }
-func handle(i Input) (Output, error) {
+
+func (b box) Put(element string) (Output, error) {
+	enBox = b
+	fmt.Printf("fff: %v\n",enBox)
 	var o Output
-	type server struct {
-		Sysname string
-	}
-	_, ok := o.Data.(server)
-	if ok {
-		fmt.Printf("yai")
-	}
-	o.Data = i.Data
-	o.ETag = "kjeks"
-	return o,nil	
+	o.Data = "saaaved"
+	return o,nil
 }
+
+
+
+type handler interface{}
+
+type Getter interface {
+	Get(element string) (Output, error)
+}
+type Putter interface {
+	Put(element string) (Output, error)
+}
+type Poster interface {
+	Post() (Output, error)
+}
+
+var handles map[string]handler
+
 
 func (i Input) handleError(err error) (output Output) {
 	output.Failed = true
@@ -121,15 +133,19 @@ func (rcvr receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("got %s - err %v",input.Data,err)
 	pretty := len(input.URL.Query()["pretty"])>0
 	var output Output
-	if err == nil {
-		output, _ = handle(input)	
-	} else {
-		output = input.handleError(err)
-	}
 	if input.URL.Path[0:len("/switch/")] == "/switch/" {
 		fmt.Printf("hei")
-		b := box{}
-		output,_ = b.Get(input.URL.Path[len("/switch"):])
+			b := box{}
+		if input.Method == "GET" {
+			output,_ = b.Get(input.URL.Path[len("/switch"):])
+		} else if input.Method == "PUT" {
+			fmt.Printf("HEI")
+		     err := json.Unmarshal(input.Data,&b)
+		     if err != nil {
+			     output.Failed = true
+		     }
+			output,_ = b.Put(input.URL.Path[len("/switch"):])
+		}
 	} else {
 		fmt.Printf("kek: %v", input.URL.Path)
 	}
