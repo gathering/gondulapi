@@ -1,7 +1,8 @@
-package main
+package objects
 
 import (
 	"fmt"
+	"github.com/gathering/gondulapi/receiver"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,7 +24,7 @@ func init() {
 	// for net/http. The func()... is something you can cargo-cult - it
 	// is al allocation function for an empty instance of the data
 	// model.
-	AddHandler("/thing/", func() interface{} { return &thing{} })
+	receiver.AddHandler("/thing/", func() interface{} { return &thing{} })
 }
 
 // Get is called on GET. b will be an empty thing. Fill it out, using the

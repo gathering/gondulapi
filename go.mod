@@ -1,4 +1,4 @@
-module github.com/gathering/gondul-api
+module github.com/gathering/gondulapi
 
 go 1.13
 

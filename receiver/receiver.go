@@ -1,4 +1,4 @@
-package main
+package receiver
 
 import (
 	"encoding/json"
@@ -139,7 +139,7 @@ func (rcvr receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rcvr.answer(w, output, pretty)
 }
 
-func main() {
+func Start() {
 	server := http.Server{}
 	serveMux := http.NewServeMux()
 	server.Handler = serveMux
