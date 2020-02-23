@@ -2,6 +2,7 @@ package objects
 
 import (
 	"fmt"
+	"github.com/gathering/gondulapi"
 	"github.com/gathering/gondulapi/receiver"
 	log "github.com/sirupsen/logrus"
 )
@@ -33,7 +34,7 @@ func init() {
 func (b *thing) Get(element string) error {
 	ans, ok := thinges[element]
 	if !ok{
-		return fmt.Errorf("Thing %s doesn't exist", element)
+		return gondulapi.Errorf(404, "Thing %s doesn't exist", element)
 	}
 	*b = *ans
 	return nil
