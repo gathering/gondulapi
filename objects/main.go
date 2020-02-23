@@ -1,37 +1,69 @@
+/*
+Package objects implements a number of objects. Currently just one, though,
+and a dummy-one at that.
+
+It is intended to be imported for side effects, but there's no reason these
+objects can't be exported like any other.
+
+An object is a data structure that implements one of Putter, Getter, Poster
+and Deleter from gondulapi to do RESTful stuff.
+
+The current Thing object is intended as a demonstration.
+*/
 package objects
 
 import (
 	"fmt"
+	"net"
 	"github.com/gathering/gondulapi"
 	"github.com/gathering/gondulapi/receiver"
 	log "github.com/sirupsen/logrus"
 )
 
-/* thing is a dummy structure to illustrate the core GET/PUT/POST/DELETE
- * API. It doesn't implement a persistent storage/database connection, only
- * stores data in memory.
- */
-type thing struct {
+/* 
+Thing is a dummy structure to illustrate the core GET/PUT/POST/DELETE
+API. It doesn't implement a persistent storage/database connection, only
+stores data in memory.
+
+It mimics a common pattern where an object also contains its own name.
+*/
+type Thing struct {
 	Sysname string
+	MgmtIP	net.IP
+	Placement ThingPlacement
+}
+
+
+// ThingPlacement illustrates nested data structures which are implicitly
+// handled, and, also mimicks the placement logic of switches in Gondul,
+// which use an X1/X2 Y1/Y2 coordinate system to determine left-most and
+// right-most X and top-most and bottom-most Y.
+//
+// I can't really remember which is which, but that is besides the point!
+type ThingPlacement struct {
+	X1	int
+	X2	int
+	Y1	int
+	Y2	int
 }
 
 // thinges represent the internal storage of thinges. Indexed by name.
-var thinges map[string]*thing
+var thinges map[string]*Thing
 
 func init() {
-	thinges = make(map[string]*thing)
+	thinges = make(map[string]*Thing)
 
 	// This is how we register for a url. The url is the same as used
 	// for net/http. The func()... is something you can cargo-cult - it
 	// is al allocation function for an empty instance of the data
 	// model.
-	receiver.AddHandler("/thing/", func() interface{} { return &thing{} })
+	receiver.AddHandler("/thing/", func() interface{} { return &Thing{} })
 }
 
 // Get is called on GET. b will be an empty thing. Fill it out, using the
 // element to determine what we're looking for. If it fails: return an
 // error. Simple.
-func (b *thing) Get(element string) error {
+func (b *Thing) Get(element string) error {
 	ans, ok := thinges[element]
 	if !ok{
 		return gondulapi.Errorf(404, "Thing %s doesn't exist", element)
@@ -49,7 +81,7 @@ func (b *thing) Get(element string) error {
 //
 // PUT is idempotent. Calling it once with a set of parameters or a hundred
 // times with the same parameters should yield the same result.
-func (b thing) Put(element string) ( error) {
+func (b Thing) Put(element string) ( error) {
 	_, ok := thinges[element]
 	if ok{
 		return fmt.Errorf("Thing %s already exist", element)
@@ -71,7 +103,7 @@ func (b thing) Put(element string) ( error) {
 }
 
 // Delete is called to delete an element.
-func (b thing) Delete(element string) (error) {
+func (b Thing) Delete(element string) (error) {
 	delete(thinges,element)
 	return nil
 }

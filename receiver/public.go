@@ -1,22 +1,25 @@
-/* Package receiver is scaffolding around net/http that facilitates a
- * RESTful HTTP API with certain patterns implicitly enforced: 
- *
- * - Whe working on the same urls, all Methods should use the exact same
- *   data structures. E.g.: What you PUT is the same as what you GET out
- *   again. No cheating.
- * - ETag is computed for all responses.
- * - All responses are JSON-encoded, including error messages.
- *
- * See objects/thing.go for how to use this, but the essence is:
- *
- * 1. Make whatever data structure you need.
- * 2. Implement one or more of gondulapi.Getter/Putter/Poster/Deleter.
- * 3. Use AddHandler() to register that data structure on a URL path
- * 4. Grab lunch.
- *
- * Receiver tries to do all HTTP and caching-related tasks for you, so you
- * don't have to.
- */
+/*
+Package receiver is scaffolding around net/http that facilitates a
+RESTful HTTP API with certain patterns implicitly enforced: 
+
+- When working on the same urls, all Methods should use the exact same
+data structures. E.g.: What you PUT is the same as what you GET out
+again. No cheating.
+
+- ETag is computed for all responses.
+
+- All responses are JSON-encoded, including error messages.
+
+See objects/thing.go for how to use this, but the essence is:
+
+1. Make whatever data structure you need.
+2. Implement one or more of gondulapi.Getter/Putter/Poster/Deleter.
+3. Use AddHandler() to register that data structure on a URL path
+4. Grab lunch.
+
+Receiver tries to do all HTTP and caching-related tasks for you, so you
+don't have to.
+*/
 package receiver
 
 import (
