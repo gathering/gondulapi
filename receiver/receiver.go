@@ -1,14 +1,14 @@
 package receiver
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/gathering/gondulapi"
 	"io"
 	"net/http"
 	"net/url"
-	"crypto/sha256"
-	"encoding/hex"
-	"github.com/gathering/gondulapi"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -23,7 +23,7 @@ type input struct {
 }
 
 type output struct {
-	code	     int
+	code         int
 	data         interface{}
 	failed       bool
 	cachecontrol string
@@ -84,16 +84,19 @@ func (rcvr receiver) get(w http.ResponseWriter, r *http.Request) (input, error) 
 	return input, nil
 }
 
-// message is a convenience function 
-func message(str string, v ...interface{}) (m struct {Message string;Error string `json:",omitempty"`}) {
-		m.Message = fmt.Sprintf(str, v...)
-		return
+// message is a convenience function
+func message(str string, v ...interface{}) (m struct {
+	Message string
+	Error   string `json:",omitempty"`
+}) {
+	m.Message = fmt.Sprintf(str, v...)
+	return
 }
 
 // handle figures out what Method the input has, casts item to the correct
 // interface and calls the relevant function, if any, for that data. For
 // PUT and POST it also parses the input data.
-func handle(item interface{}, input input,path string) (output output) {
+func handle(item interface{}, input input, path string) (output output) {
 	output.failed = true
 	output.code = 200
 	var err error
@@ -102,23 +105,23 @@ func handle(item interface{}, input input,path string) (output output) {
 			if output.data == nil {
 				output.data = message("%s on %s successful", input.method, path)
 			}
-			return 
+			return
 		}
 		code := 400
-		if gerr,ok := err.(gondulapi.Error); ok {
+		if gerr, ok := err.(gondulapi.Error); ok {
 			code = gerr.Code
 		}
 		output.code = code
 		if output.data == nil {
 			m := message("%s on %s failed", input.method, path)
 			if err != nil {
-				m.Error = fmt.Sprintf("%v",err)
+				m.Error = fmt.Sprintf("%v", err)
 			}
 			output.data = m
 		}
 	}()
 	if input.method == "GET" {
-		get,ok := item.(gondulapi.Getter)
+		get, ok := item.(gondulapi.Getter)
 		if !ok {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
@@ -133,7 +136,7 @@ func handle(item interface{}, input input,path string) (output output) {
 		if err != nil {
 			return
 		}
-		put,ok := item.(gondulapi.Putter)
+		put, ok := item.(gondulapi.Putter)
 		if !ok {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
@@ -144,7 +147,7 @@ func handle(item interface{}, input input,path string) (output output) {
 		}
 		output.failed = false
 	} else if input.method == "DELETE" {
-		del,ok := item.(gondulapi.Deleter)
+		del, ok := item.(gondulapi.Deleter)
 		if !ok {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
@@ -158,7 +161,7 @@ func handle(item interface{}, input input,path string) (output output) {
 		if err != nil {
 			return
 		}
-		post,ok := item.(gondulapi.Poster)
+		post, ok := item.(gondulapi.Poster)
 		if !ok {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
@@ -181,7 +184,6 @@ func (rcvr receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("got %s - err %v", input.data, err)
 	pretty := len(input.url.Query()["pretty"]) > 0
 	item := rcvr.alloc()
-	output := handle(item, input,rcvr.path)
+	output := handle(item, input, rcvr.path)
 	rcvr.answer(w, output, pretty)
 }
-

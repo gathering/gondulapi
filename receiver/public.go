@@ -1,6 +1,6 @@
 /*
 Package receiver is scaffolding around net/http that facilitates a
-RESTful HTTP API with certain patterns implicitly enforced: 
+RESTful HTTP API with certain patterns implicitly enforced:
 
 - When working on the same urls, all Methods should use the exact same
 data structures. E.g.: What you PUT is the same as what you GET out

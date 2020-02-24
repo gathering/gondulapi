@@ -14,13 +14,14 @@ package objects
 
 import (
 	"fmt"
-	"net"
 	"github.com/gathering/gondulapi"
+	"github.com/gathering/gondulapi/db"
 	"github.com/gathering/gondulapi/receiver"
+	"github.com/gathering/gondulapi/types"
 	log "github.com/sirupsen/logrus"
 )
 
-/* 
+/*
 Thing is a dummy structure to illustrate the core GET/PUT/POST/DELETE
 API. It doesn't implement a persistent storage/database connection, only
 stores data in memory.
@@ -28,11 +29,10 @@ stores data in memory.
 It mimics a common pattern where an object also contains its own name.
 */
 type Thing struct {
-	Sysname string
-	MgmtIP	net.IP
+	Sysname   string
+	MgmtIP    types.IP
 	Placement ThingPlacement
 }
-
 
 // ThingPlacement illustrates nested data structures which are implicitly
 // handled, and, also mimicks the placement logic of switches in Gondul,
@@ -41,17 +41,13 @@ type Thing struct {
 //
 // I can't really remember which is which, but that is besides the point!
 type ThingPlacement struct {
-	X1	int
-	X2	int
-	Y1	int
-	Y2	int
+	X1 int
+	X2 int
+	Y1 int
+	Y2 int
 }
 
-// thinges represent the internal storage of thinges. Indexed by name.
-var thinges map[string]*Thing
-
 func init() {
-	thinges = make(map[string]*Thing)
 
 	// This is how we register for a url. The url is the same as used
 	// for net/http. The func()... is something you can cargo-cult - it
@@ -64,11 +60,26 @@ func init() {
 // element to determine what we're looking for. If it fails: return an
 // error. Simple.
 func (b *Thing) Get(element string) error {
-	ans, ok := thinges[element]
-	if !ok{
+	rows, err := db.DB.Query("SELECT sysname,ip FROM things WHERE sysname = $1", element)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		rows.Close()
+	}()
+
+	ok := rows.Next()
+	if !ok {
 		return gondulapi.Errorf(404, "Thing %s doesn't exist", element)
 	}
-	*b = *ans
+	err = rows.Scan(&b.Sysname, &b.MgmtIP)
+	if err != nil {
+		return err
+	}
+	if rows.Next() {
+		return gondulapi.Errorf(500, "Thing %s has multiple copies....", element)
+	}
+
 	return nil
 }
 
@@ -81,29 +92,52 @@ func (b *Thing) Get(element string) error {
 //
 // PUT is idempotent. Calling it once with a set of parameters or a hundred
 // times with the same parameters should yield the same result.
-func (b Thing) Put(element string) ( error) {
-	_, ok := thinges[element]
-	if ok{
-		return fmt.Errorf("Thing %s already exist", element)
+func (b Thing) Put(element string) error {
+	if element == "" {
+		return gondulapi.Errorf(400, "PUT requires an element path to put")
+		element = b.Sysname
 	}
-	if b.Sysname == "" && element != "" {
+	if b.Sysname == "" {
 		log.Printf("Blank sysname, using url-path")
 		b.Sysname = element
 	}
-	if element == "" && b.Sysname != "" {
-		element = b.Sysname
-	}
 	if b.Sysname != element {
-		return fmt.Errorf("Thing url path %s doesn't match json-specified name %s", element,b.Sysname)
+		return fmt.Errorf("Thing url path %s doesn't match json-specified name %s", element, b.Sysname)
 	}
+	if b.exists(element) {
+		return b.update()
+	}
+	return b.save()
+}
 
-	thinges[element] = &b
-	log.Printf("Put element %s, data: %v\n", element, b)
-	return nil
+func (b Thing) exists(element string) bool {
+	var existing Thing
+	err := existing.Get(element)
+	exists := true
+	if err != nil {
+		gerr, ok := err.(gondulapi.Error)
+		if ok && gerr.Code == 404 {
+			exists = false
+		}
+	}
+	return exists
+}
+
+func (b Thing) save() error {
+	_, err := db.DB.Exec("INSERT INTO things (sysname,ip) VALUES($1,$2)", b.Sysname, b.MgmtIP.String())
+	return err
+}
+
+func (b Thing) update() error {
+	_, err := db.DB.Exec("UPDATE things SET ip = $1 WHERE sysname = $2", b.MgmtIP.String(), b.Sysname)
+	return err
+}
+func (b Thing) Post() error {
+	return b.save()
 }
 
 // Delete is called to delete an element.
-func (b Thing) Delete(element string) (error) {
-	delete(thinges,element)
-	return nil
+func (b Thing) Delete(element string) error {
+	_, err := db.DB.Exec("DELETE FROM things WHERE sysname = $1", b.Sysname)
+	return err
 }
