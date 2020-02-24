@@ -1,8 +1,26 @@
+/*
+Gondul GO API, data types
+Copyright 2020, Kristian Lyngstøl <kly@kly.no>
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+
 package types
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net"
 )
 
@@ -17,6 +35,7 @@ type IP struct {
 	Mask int
 }
 
+// Scan is used by database/sql's Scan to parse bytes to an IP structure.
 func (i *IP) Scan(src interface{}) error {
 	switch value := src.(type) {
 	case string:
@@ -27,6 +46,9 @@ func (i *IP) Scan(src interface{}) error {
 		return fmt.Errorf("invalid IP")
 	}
 }
+
+// String returns a ip address in string format, with an optional /mask if
+// the IP has a non-zero mask.
 func (i *IP) String() string {
 	if i.Mask != 0 {
 		return fmt.Sprintf("%s/%d", i.IP.String(), i.Mask)
@@ -34,16 +56,18 @@ func (i *IP) String() string {
 	return i.IP.String()
 }
 
+// MarshalText returns a text version of an ip using String, it is used by
+// various encoders, including the JSON encoder.
 func (i IP) MarshalText() ([]byte, error) {
-	log.Printf("Marshalling i: %v", i)
 	return []byte(i.String()), nil
 }
 
+// UnmarshalText parses a byte string onto an IP structure. It is used by
+// various encoders, including the JSON encoder.
 func (i *IP) UnmarshalText(b []byte) error {
 	s := string(b)
 	ip, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
-		log.Printf("Failed to use ParseCIDR on %s, falling back...", s)
 		ip = net.ParseIP(s)
 		i.Mask = 0
 		if ip == nil {
