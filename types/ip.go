@@ -6,6 +6,12 @@ import (
 	"net"
 )
 
+// IP represent an IP and an optional netmask/size. It is provided because
+// while net/IP provides much of what is needed for marshalling to/from
+// text and json, it doesn't provide a convenient netmask. And it doesn't
+// implement database/sql's Scanner either. This type implements both
+// MarshalText/UnmarshalText and Scan(), and to top it off: String(). this
+// should ensure maximum usability.
 type IP struct {
 	IP   net.IP
 	Mask int
