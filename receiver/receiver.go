@@ -88,6 +88,12 @@ func (rcvr receiver) get(w http.ResponseWriter, r *http.Request) (input, error) 
 	var input input
 	input.url = r.URL
 	input.method = r.Method
+	log.WithFields(log.Fields{
+                       "url": r.URL,
+                       "method": r.Method,
+                       "address":  r.RemoteAddr,
+        }).Infof("Request")
+
 	if r.ContentLength != 0 {
 		input.data = make([]byte, r.ContentLength)
 

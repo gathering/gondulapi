@@ -71,7 +71,7 @@ func Start() {
 		log.Printf("idx: %v h: %v\n", idx, h)
 		serveMux.Handle(idx, receiver{alloc: h, path: idx})
 	}
-	server.Addr = "[::1]:8080"
+	server.Addr = ":8080"
 	log.WithField("address", server.Addr).Info("Starting http receiver")
 	log.Fatal(server.ListenAndServe())
 }
