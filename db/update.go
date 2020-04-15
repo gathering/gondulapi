@@ -76,7 +76,7 @@ func enumerate(haystack string, all bool, d interface{}) (keyvals, error) {
 // string and matching the haystack with the needle. It skips fields that
 // are nil-pointers.
 func Update(table string, haystack string, needle interface{}, d interface{}) error {
-	kvs, err := enumerate(haystack, d)
+	kvs, err := enumerate(haystack, false, d)
 	if err != nil {
 		panic(err)
 	}
@@ -102,7 +102,7 @@ func Update(table string, haystack string, needle interface{}, d interface{}) er
 // non-nil-pointer objects as fields, so it is up to the caller and the
 // database schema to enforce default values.
 func Insert(table string, d interface{}) error {
-	kvs, err := enumerate("-", d)
+	kvs, err := enumerate("-", false, d)
 	if err != nil {
 		panic(err)
 	}
