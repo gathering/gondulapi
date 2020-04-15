@@ -17,7 +17,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-
 // Package db integrates with generic databases, so far it doesn't do much,
 // but it's supposed to do more.
 package db
@@ -25,31 +24,31 @@ package db
 import (
 	"database/sql"
 
+	gapi "github.com/gathering/gondulapi"
 	_ "github.com/lib/pq" // for postgres support
 	log "github.com/sirupsen/logrus"
 )
 
-// Connstr is the datbase/sql connection string used to open a connection
-// to a postgres database. We only support postgres, because why would you
-// need anything else?
-var Connstr string
-
 // DB is the main database handle used throughout the API
 var DB *sql.DB
 
-func Connect() {
+// Connect sets up the database connection, using the configured
+// ConnectionString, and ensures it is working.
+func Connect() error {
 	var err error
-	if Connstr == "" {
+	if gapi.Config.ConnectionString == "" {
 		log.Printf("Using default connection string for debug purposes")
-		Connstr = "user=kly password=lolkek dbname=klytest sslmode=disable"
+		gapi.Config.ConnectionString = "user=kly password=lolkek dbname=klytest sslmode=disable"
 	}
-	DB, err = sql.Open("postgres", Connstr)
+	DB, err = sql.Open("postgres", gapi.Config.ConnectionString)
 	if err != nil {
 		log.Printf("Failed to connect to database: %v", err)
+		return gapi.Error{500, "Failed to connect to database"}
 	}
 	err = DB.Ping()
 	if err != nil {
 		log.Printf("Failed to connect to database: %v", err)
+		return gapi.Error{500, "Failed to connect to database"}
 	}
+	return nil
 }
-

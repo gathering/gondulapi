@@ -42,9 +42,10 @@ don't have to.
 package receiver
 
 import (
-	"net/http"
-
+	"fmt"
+	gapi "github.com/gathering/gondulapi"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 )
 
 // AddHandler registeres an allocator/data structure with a url. The
@@ -67,11 +68,20 @@ func Start() {
 	server := http.Server{}
 	serveMux := http.NewServeMux()
 	server.Handler = serveMux
-	for idx, h := range handles {
-		log.Printf("idx: %v h: %v\n", idx, h)
-		serveMux.Handle(idx, receiver{alloc: h, path: idx})
+	if gapi.Config.Prefix != "" {
+		log.Tracef("Prefixing URLs with %s", gapi.Config.Prefix)
 	}
-	server.Addr = ":8080"
+	for idx, h := range handles {
+		target := fmt.Sprintf("%s%s", gapi.Config.Prefix, idx)
+		log.Printf("Listening for %v (%T)\n", target, h())
+		serveMux.Handle(target, receiver{alloc: h, path: target})
+	}
+	if gapi.Config.ListenAddress == "" {
+		log.Printf("No listenaddress configured, using default :8080")
+		server.Addr = ":8080"
+	} else {
+		server.Addr = gapi.Config.ListenAddress
+	}
 	log.WithField("address", server.Addr).Info("Starting http receiver")
 	log.Fatal(server.ListenAndServe())
 }

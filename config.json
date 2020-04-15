@@ -1,0 +1,6 @@
+{
+	"listenaddress": ":8080",
+	"connectionstring": "user=kly password=lolkek dbname=klytest sslmode=disable",
+	"debug": true,
+	"prefix": "/api"
+}

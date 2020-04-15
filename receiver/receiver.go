@@ -17,7 +17,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-
 package receiver
 
 import (
@@ -89,10 +88,10 @@ func (rcvr receiver) get(w http.ResponseWriter, r *http.Request) (input, error) 
 	input.url = r.URL
 	input.method = r.Method
 	log.WithFields(log.Fields{
-                       "url": r.URL,
-                       "method": r.Method,
-                       "address":  r.RemoteAddr,
-        }).Infof("Request")
+		"url":     r.URL,
+		"method":  r.Method,
+		"address": r.RemoteAddr,
+	}).Infof("Request")
 
 	if r.ContentLength != 0 {
 		input.data = make([]byte, r.ContentLength)
