@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 package types
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"net"
 )
@@ -54,6 +55,12 @@ func (i *IP) String() string {
 		return fmt.Sprintf("%s/%d", i.IP.String(), i.Mask)
 	}
 	return i.IP.String()
+}
+
+// Value implements sql/driver's Value interface to provide implicit
+// support for writing the value.
+func (i IP) Value() (driver.Value, error) {
+	return i.String(), nil
 }
 
 // MarshalText returns a text version of an ip using String, it is used by

@@ -49,8 +49,8 @@ It mimics a common pattern where an object also contains its own name.
 */
 type Thing struct {
 	Sysname   string
-	MgmtIP    types.IP
-	Placement ThingPlacement
+	MgmtIP    *types.IP `column:"ip"`
+	Placement *ThingPlacement
 }
 
 // ThingPlacement illustrates nested data structures which are implicitly
@@ -143,13 +143,11 @@ func (b Thing) exists(element string) bool {
 }
 
 func (b Thing) save() error {
-	_, err := db.DB.Exec("INSERT INTO things (sysname,ip) VALUES($1,$2)", b.Sysname, b.MgmtIP.String())
-	return err
+	return db.Insert("things", b)
 }
 
 func (b Thing) update() error {
-	_, err := db.DB.Exec("UPDATE things SET ip = $1 WHERE sysname = $2", b.MgmtIP.String(), b.Sysname)
-	return err
+	return db.Update("things", "sysname", b.Sysname, b)
 }
 
 // Post stores the provided object. It's bugged. I know.
