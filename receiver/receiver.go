@@ -181,6 +181,7 @@ func handle(item interface{}, input input, path string) (output output) {
 		if err != nil {
 			return
 		}
+		output.failed = false
 	} else if input.method == "POST" {
 		err = json.Unmarshal(input.data, &item)
 		if err != nil {

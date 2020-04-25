@@ -27,11 +27,20 @@ objects can't be exported like any other.
 An object is a data structure that implements one of Putter, Getter, Poster
 and Deleter from gondulapi to do RESTful stuff.
 
-The current Thing object is intended as a demonstration.
+This file demonstrates three things:
+
+1. How to implement basic GET/PUT/POST/DELETE using gondulapi/receiver.
+
+2. How to use the simplified gondulapi/db methods to map your own interface
+directly to a database element without writing SQL.
+
+3. Implementing custom-types that are supported implicitly by gondulapi/db.
+
 */
 package objects
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"github.com/gathering/gondulapi"
 	"github.com/gathering/gondulapi/db"
@@ -42,10 +51,12 @@ import (
 
 /*
 Thing is a dummy structure to illustrate the core GET/PUT/POST/DELETE
-API. It doesn't implement a persistent storage/database connection, only
-stores data in memory.
+API.
 
 It mimics a common pattern where an object also contains its own name.
+
+We use a tag to inform gondulapi/db that MgmtIP is mapped to the "ip"
+column in the database.
 */
 type Thing struct {
 	Sysname   string
@@ -58,7 +69,9 @@ type Thing struct {
 // which use an X1/X2 Y1/Y2 coordinate system to determine left-most and
 // right-most X and top-most and bottom-most Y.
 //
-// I can't really remember which is which, but that is besides the point!
+// Please note that Postgresql will always place the upper right corner
+// first - so X1/Y1 might be X2/Y2 when you read it back out - but the
+// semantics are correct.
 type ThingPlacement struct {
 	X1 int
 	X2 int
@@ -66,8 +79,29 @@ type ThingPlacement struct {
 	Y2 int
 }
 
-func init() {
+// Scan implements sql.Scan to enable gondulapi/db to read the SQL directly
+// into our custom type.
+func (tp *ThingPlacement) Scan(src interface{}) error {
+	switch value := src.(type) {
+	case []byte:
+		str := string(value)
+		_, err := fmt.Sscanf(str, "(%d,%d),(%d,%d)", &tp.X1, &tp.Y1, &tp.X2, &tp.Y2)
+		return err
+	default:
+		return fmt.Errorf("invalid IP")
+	}
+}
 
+// Value implements sql/driver's Value interface to provide implicit
+// support for writing the value.
+//
+// In other words: Scan() enables SELECT and Value() allows INSERT/UPDATE.
+func (tp ThingPlacement) Value() (driver.Value, error) {
+	x := fmt.Sprintf("((%d,%d),(%d,%d))", tp.X1, tp.Y1, tp.X2, tp.Y2)
+	return x, nil
+}
+
+func init() {
 	// This is how we register for a url. The url is the same as used
 	// for net/http. The func()... is something you can cargo-cult - it
 	// is al allocation function for an empty instance of the data
@@ -79,24 +113,13 @@ func init() {
 // element to determine what we're looking for. If it fails: return an
 // error. Simple.
 func (b *Thing) Get(element string) error {
-	rows, err := db.DB.Query("SELECT sysname,ip FROM things WHERE sysname = $1", element)
+	found, err := db.Select(element, "sysname", "things", b)
 	if err != nil {
-		return err
+		log.Printf("Error: %v", err)
+		return gondulapi.Errorf(500, "Unable to fetch %s from the database....", element)
 	}
-	defer func() {
-		rows.Close()
-	}()
-
-	ok := rows.Next()
-	if !ok {
-		return gondulapi.Errorf(404, "Thing %s doesn't exist", element)
-	}
-	err = rows.Scan(&b.Sysname, &b.MgmtIP)
-	if err != nil {
-		return err
-	}
-	if rows.Next() {
-		return gondulapi.Errorf(500, "Thing %s has multiple copies....", element)
+	if !found {
+		return gondulapi.Errorf(404, "Couldn't find %s", element)
 	}
 
 	return nil
@@ -123,40 +146,19 @@ func (b Thing) Put(element string) error {
 	if b.Sysname != element {
 		return fmt.Errorf("Thing url path %s doesn't match json-specified name %s", element, b.Sysname)
 	}
-	if b.exists(element) {
-		return b.update()
-	}
-	return b.save()
+	return db.Upsert(b.Sysname, "sysname", "things", b)
 }
 
-func (b Thing) exists(element string) bool {
-	var existing Thing
-	err := existing.Get(element)
-	exists := true
-	if err != nil {
-		gerr, ok := err.(gondulapi.Error)
-		if ok && gerr.Code == 404 {
-			exists = false
-		}
-	}
-	return exists
-}
-
-func (b Thing) save() error {
-	return db.Insert("things", b)
-}
-
-func (b Thing) update() error {
-	return db.Update("things", "sysname", b.Sysname, b)
-}
-
-// Post stores the provided object. It's bugged. I know.
+// Post stores the provided object. Unlike PUT, it will always use INSERT.
 func (b Thing) Post() error {
-	return b.save()
+	return db.Insert("things", b)
 }
 
 // Delete is called to delete an element.
 func (b Thing) Delete(element string) error {
-	_, err := db.DB.Exec("DELETE FROM things WHERE sysname = $1", b.Sysname)
+	err := db.Delete(element, "sysname", "things")
+	if err != nil {
+		fmt.Printf("delete lolz: %v\n", err)
+	}
 	return err
 }

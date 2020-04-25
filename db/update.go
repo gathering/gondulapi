@@ -17,8 +17,26 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-// Package db integrates with generic databases, so far it doesn't do much,
-// but it's supposed to do more.
+// Package db provides convenience-functions for mapping Go-types to a
+// database. It does not address a few well-known issues with database
+// code and is not particularly fast, but is intended to make 90% of the
+// database-work trivial, while not attempting to solve the last 10% at
+// all.
+//
+// The convenience-functions work well if you are not regularly handling
+// updates to the same content in parallel, and you do not depend on
+// extreme performance for SELECT. If you are unsure if this is the case,
+// I'm willing to bet five kilograms of bananas that it's not. You'd know
+// if it was.
+//
+// You can always just use the db/DB handle directly, which is provided
+// intentionally.
+//
+// db tries to automatically map a type to a row, both on insert/update and
+// select. It does this using introspection and the official database/sql
+// package's interfaces for scanning results and packing data types. So if
+// your data types implement sql.Scanner and sql/driver.Value, you can use
+// them directly with 0 extra boiler-plate.
 package db
 
 import (
@@ -75,7 +93,7 @@ func enumerate(haystack string, all bool, d interface{}) (keyvals, error) {
 // Update attempts to update the object in the database, using the provided
 // string and matching the haystack with the needle. It skips fields that
 // are nil-pointers.
-func Update(table string, haystack string, needle interface{}, d interface{}) error {
+func Update(needle interface{}, haystack string, table string, d interface{}) error {
 	kvs, err := enumerate(haystack, false, d)
 	if err != nil {
 		panic(err)
@@ -120,5 +138,41 @@ func Insert(table string, d interface{}) error {
 		log.Printf("DB.Exec(\"%s\",kvs.values...) failed: %v", lead, err)
 		return err
 	}
+	return nil
+}
+
+// Upsert makes database-people cringe by first checking if an element
+// exists, if it does, it is updated. If it doesn't, it is inserted. This
+// is NOT a transaction-safe implementation, which means: use at your own
+// peril. The biggest risks are:
+//
+// 1. If the element is created by a third party during Upsert, the update
+// will fail because we will issue an INSERT instead of UPDATE. This will
+// generate an error, so can be handled by the frontend.
+//
+// 2. If an element is deleted by a third party during Upsert, Upsert will
+// still attempt an UPDATE, which will fail silently (for now). This can be
+// handled by a front-end doing a double-check, or by just assuming it
+// doesn't happen often enough to be worth fixing.
+func Upsert(needle interface{}, haystack string, table string, d interface{}) error {
+	found, err := Exists(needle, haystack, table)
+	if err != nil {
+		return err
+	}
+	if found {
+		return Update(needle, haystack, table, d)
+	}
+	return Insert(table, d)
+}
+
+// Delete will delete the element, and will also delete duplicates.
+func Delete(needle interface{}, haystack string, table string) (err error) {
+	q := fmt.Sprintf("DELETE FROM %s WHERE %s = $1", table, haystack)
+	rows, err := DB.Query(q, needle)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	rows.Close()
 	return nil
 }

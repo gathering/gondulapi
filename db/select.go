@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"reflect"
 	"unicode"
-
 )
 
 // Select populates the provided interface(should be a pointer) by
@@ -53,7 +52,7 @@ import (
 // zero-values of the relevant objects. After this, the query is executed
 // and the values are stored on the temporary values. The last pass stores
 // them _back_ onto the original d interface.
-func Select(needle string, haystack string, table string, d interface{}) (found bool, err error) {
+func Select(needle interface{}, haystack string, table string, d interface{}) (found bool, err error) {
 	st := reflect.TypeOf(d)
 	v := reflect.ValueOf(d)
 	if st.Kind() == reflect.Ptr {
@@ -61,8 +60,7 @@ func Select(needle string, haystack string, table string, d interface{}) (found 
 		v = v.Elem()
 	}
 
-
-	vals := make([]interface{},0)
+	vals := make([]interface{}, 0)
 	keys := ""
 	comma := ""
 	for i := 0; i < st.NumField(); i++ {
@@ -75,14 +73,14 @@ func Select(needle string, haystack string, table string, d interface{}) (found 
 		if ncol, ok := field.Tag.Lookup("column"); ok {
 			col = ncol
 		}
-		keys = fmt.Sprintf("%s%s%s",keys,comma,col)
-		comma=", "
+		keys = fmt.Sprintf("%s%s%s", keys, comma, col)
+		comma = ", "
 		newv := reflect.New(value.Type())
 		intfval := newv.Interface()
 		vals = append(vals, intfval)
 	}
-	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1",keys,table,haystack)
-	rows, err := DB.Query(q,needle)
+	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1", keys, table, haystack)
+	rows, err := DB.Query(q, needle)
 	if err != nil {
 		return
 	}
@@ -108,5 +106,28 @@ func Select(needle string, haystack string, table string, d interface{}) (found 
 		newv := reflect.Indirect(reflect.ValueOf(vals[i]))
 		value.Set(newv)
 	}
+	return
+}
+
+// Exists checks if a row where haystack matches the needle exists on the
+// given table. It returns found=true if it does. It returns found=false if
+// it doesn't find it - including if an error occurs (which will also be
+// returned).
+func Exists(needle interface{}, haystack string, table string) (found bool, err error) {
+	q := fmt.Sprintf("SELECT * FROM %s WHERE %s = $1 LIMIT 1", table, haystack)
+	rows, err := DB.Query(q, needle)
+	if err != nil {
+		return
+	}
+	defer func() {
+		// XXX: Unsure if this is actually needed here, to be
+		// honest.
+		rows.Close()
+	}()
+	ok := rows.Next()
+	if !ok {
+		return
+	}
+	found = true
 	return
 }
