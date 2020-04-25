@@ -96,7 +96,8 @@ func enumerate(haystack string, all bool, d interface{}) (keyvals, error) {
 func Update(needle interface{}, haystack string, table string, d interface{}) error {
 	kvs, err := enumerate(haystack, false, d)
 	if err != nil {
-		panic(err)
+		log.WithError(err).Error("Update(): enumerate() failed")
+		return err
 	}
 	lead := fmt.Sprintf("UPDATE %s SET ", table)
 	comma := ""
@@ -111,6 +112,7 @@ func Update(needle interface{}, haystack string, table string, d interface{}) er
 	_, err = DB.Exec(lead, kvs.values...)
 	if err != nil {
 		log.Printf("DB.Exec(\"%s\",kvs.values...) failed: %v", lead, err)
+		log.WithError(err).WithField("lead", lead).Error("Update(): EXEC failed")
 		return err
 	}
 	return nil
@@ -122,7 +124,8 @@ func Update(needle interface{}, haystack string, table string, d interface{}) er
 func Insert(table string, d interface{}) error {
 	kvs, err := enumerate("-", false, d)
 	if err != nil {
-		panic(err)
+		log.WithError(err).Error("Insert(): Enumerate failed")
+		return err
 	}
 	lead := fmt.Sprintf("INSERT INTO %s (", table)
 	middle := ""
@@ -135,7 +138,7 @@ func Insert(table string, d interface{}) error {
 	lead = fmt.Sprintf("%s) VALUES(%s)", lead, middle)
 	_, err = DB.Exec(lead, kvs.values...)
 	if err != nil {
-		log.Printf("DB.Exec(\"%s\",kvs.values...) failed: %v", lead, err)
+		log.WithError(err).WithField("lead", lead).Error("Insert(): EXEC failed")
 		return err
 	}
 	return nil
@@ -168,11 +171,10 @@ func Upsert(needle interface{}, haystack string, table string, d interface{}) er
 // Delete will delete the element, and will also delete duplicates.
 func Delete(needle interface{}, haystack string, table string) (err error) {
 	q := fmt.Sprintf("DELETE FROM %s WHERE %s = $1", table, haystack)
-	rows, err := DB.Query(q, needle)
+	_, err = DB.Exec(q, needle)
 	if err != nil {
-		fmt.Printf("err: %v\n", err)
+		log.WithError(err).WithField("query", q).Error("Delete(): Query failed")
 		return
 	}
-	rows.Close()
 	return nil
 }

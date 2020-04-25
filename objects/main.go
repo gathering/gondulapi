@@ -57,12 +57,36 @@ It mimics a common pattern where an object also contains its own name.
 
 We use a tag to inform gondulapi/db that MgmtIP is mapped to the "ip"
 column in the database.
+
+Special note here: The only way for Go to distinguish between "The variable
+was not provided" and "the variable was provided, but set to the
+zero-value" is if the field is a pointer. That means that if Vlan is a
+nil-pointer in Put, the client didn't specify it and we should not modify
+it. If, however, it is a allocated, pointing to int<0>, it was provided,
+but set to 0. This is important: If you change Vlan to "Vlan int" instead
+of "Vlan *int", two things will happen:
+
+1. If a client doesn't provide vlan on an update with PUT, we will still
+set it to 0.
+
+2. If a row in the database has vlan set to NULL, we will fail to scan that
+since NULL can not be converted into an int.
+
+In general, that means you want pointers.
+
+It also implies that you should use constraints on your database to ensure
+that the values are legal. Set NOT NULL if it shouldn't be null. Set default
+values if it's OK to omit it on INSERT, and so on.
 */
 type Thing struct {
 	Sysname   string
 	MgmtIP    *types.IP `column:"ip"`
+	Vlan      *int
 	Placement *ThingPlacement
 }
+
+// Things demonstrates how to fetch multiple items at the same time.
+type Things []Thing
 
 // ThingPlacement illustrates nested data structures which are implicitly
 // handled, and, also mimicks the placement logic of switches in Gondul,
@@ -107,22 +131,26 @@ func init() {
 	// is al allocation function for an empty instance of the data
 	// model.
 	receiver.AddHandler("/thing/", func() interface{} { return &Thing{} })
+	receiver.AddHandler("/things/", func() interface{} { return &Things{} })
+}
+
+// Get uses SelectMany to fetch multiple rows. For this, "b" has to be a
+// pointer to a slice, which it happens to be here (It's []Thing,
+// remember).
+func (b *Things) Get(element string) error {
+	if element == "" {
+		// Ok this is a bit of a hack, as it uses "WHERE 1 = 1" to
+		// avoid having an other function without conditions.
+		return db.SelectMany(1, "1", "things", b)
+	}
+	return db.SelectMany(element, "vlan", "things", b)
 }
 
 // Get is called on GET. b will be an empty thing. Fill it out, using the
 // element to determine what we're looking for. If it fails: return an
 // error. Simple.
 func (b *Thing) Get(element string) error {
-	found, err := db.Select(element, "sysname", "things", b)
-	if err != nil {
-		log.Printf("Error: %v", err)
-		return gondulapi.Errorf(500, "Unable to fetch %s from the database....", element)
-	}
-	if !found {
-		return gondulapi.Errorf(404, "Couldn't find %s", element)
-	}
-
-	return nil
+	return db.Get(element, "sysname", "things", b)
 }
 
 // Put is used to store an element with an absolute URL. In our case, the
@@ -137,14 +165,13 @@ func (b *Thing) Get(element string) error {
 func (b Thing) Put(element string) error {
 	if element == "" {
 		return gondulapi.Errorf(400, "PUT requires an element path to put")
-		element = b.Sysname
 	}
 	if b.Sysname == "" {
-		log.Printf("Blank sysname, using url-path")
+		log.Tracef("Blank sysname, using url-path")
 		b.Sysname = element
 	}
 	if b.Sysname != element {
-		return fmt.Errorf("Thing url path %s doesn't match json-specified name %s", element, b.Sysname)
+		return gondulapi.Errorf(400, "Thing url path %s doesn't match json-specified name %s", element, b.Sysname)
 	}
 	return db.Upsert(b.Sysname, "sysname", "things", b)
 }

@@ -17,12 +17,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-// Package db integrates with generic databases, so far it doesn't do much,
-// but it's supposed to do more.
 package db
 
 import (
 	"fmt"
+	"github.com/gathering/gondulapi"
+	log "github.com/sirupsen/logrus"
 	"reflect"
 	"unicode"
 )
@@ -51,21 +51,94 @@ import (
 // iterates over the fields of d, preparing both the query and allocating
 // zero-values of the relevant objects. After this, the query is executed
 // and the values are stored on the temporary values. The last pass stores
-// them _back_ onto the original d interface.
 func Select(needle interface{}, haystack string, table string, d interface{}) (found bool, err error) {
-	st := reflect.TypeOf(d)
-	v := reflect.ValueOf(d)
-	if st.Kind() == reflect.Ptr {
-		st = st.Elem()
-		v = v.Elem()
+	st := reflect.ValueOf(d)
+	if st.Kind() != reflect.Ptr {
+		log.Error("Select() called with non-pointer interface. This wouldn't really work.")
+		return false, gondulapi.Errorf(500, "Internal server error")
 	}
+	st = reflect.Indirect(st)
 
+	// Set up a slice for the response
+	retv := reflect.MakeSlice(reflect.SliceOf(st.Type()), 0, 0)
+	retvi := retv.Interface()
+
+	// Do the actual work :D
+	err = SelectMany(needle, haystack, table, &retvi)
+
+	if err != nil {
+		return false, err
+	}
+	// retvi will be overwritten with the response (because that's how
+	// append works), so retv now points to the empty original - update
+	// it.
+	retv = reflect.ValueOf(retvi)
+	if retv.Len() == 0 {
+		return false, nil
+	}
+	reply := retv.Index(0)
+	setthis := reflect.Indirect(reflect.ValueOf(d))
+	setthis.Set(reply)
+	return true, nil
+}
+
+// SelectMany selects multiple rows from the table, populating the slice
+// pointed to by d. It must, as such, be called with a pointer to a slice as
+// the d-value (it checks).
+//
+// It returns the data in d, with an error if something failed, obviously.
+// It's not particularly fast, or bullet proof, but:
+//
+// 1. It handles the needle safely, e.g., it lets the sql driver do the
+// escaping.
+//
+// 2. The haystack and table is NOT safe.
+//
+// 3. It uses database/sql.Scan, so as long as your elements implement
+// that, it will Just Work.
+//
+// It works by first determining the base object/type to fetch by digging
+// into d with reflection. Once that is established, it iterates over the
+// discovered base-structure and does two things: creates the list of
+// columns to SELECT, and creates a reflect.Value for each column to store
+// the result. Once this loop is done, it executes the query, then iterates
+// over the replies, storing them in new base elements. At the very end,
+// the *d is overwritten with the new slice.
+func SelectMany(needle interface{}, haystack string, table string, d interface{}) error {
+	dval := reflect.ValueOf(d)
+	// This is needed because we need to be able to update with a
+	// potentially new slice.
+	if dval.Kind() != reflect.Ptr {
+		log.Errorf("SelectMany() called with non-pointer interface. This wouldn't really work. Got %T", d)
+		return gondulapi.Errorf(500, "Internal server error")
+	}
+	dval = reflect.Indirect(dval)
+
+	// This enables Select() to work, and generally masks over issues
+	// where the type is obscured by layers of casting and conversion.
+	if dval.Kind() == reflect.Interface {
+		dval = dval.Elem()
+	}
+	// And obviously it needs to actually be a slice.
+	if dval.Kind() != reflect.Slice {
+		log.Errorf("SelectMany() must be called with pointer-to-slice, e.g: &[]foo, got: %T inner is: %v / %#v / %s / kind: %s", d, dval, dval, dval, dval.Kind())
+		return gondulapi.Errorf(500, "Internal server error")
+	}
+	st := dval.Type()
+	st = st.Elem()
+
+	// We make a new slice - this is what we will actually return/set
+	retv := reflect.MakeSlice(reflect.SliceOf(st), 0, 0)
+
+	// This is used to temporarily hold the values as they are scanned.
+	// We need it to get the correct types for the sql driver to Scan into.
 	vals := make([]interface{}, 0)
 	keys := ""
 	comma := ""
+
+	// Iterate over the struct - store the keys, and populate vals.
 	for i := 0; i < st.NumField(); i++ {
 		field := st.Field(i)
-		value := v.Field(i)
 		if !unicode.IsUpper(rune(field.Name[0])) {
 			continue
 		}
@@ -75,38 +148,53 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 		}
 		keys = fmt.Sprintf("%s%s%s", keys, comma, col)
 		comma = ", "
-		newv := reflect.New(value.Type())
-		intfval := newv.Interface()
-		vals = append(vals, intfval)
+		value := reflect.New(field.Type)
+		vals = append(vals, value.Interface())
 	}
 	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1", keys, table, haystack)
+	log.WithField("query", q).Tracef("Select()")
 	rows, err := DB.Query(q, needle)
 	if err != nil {
-		return
+		log.WithError(err).WithField("query", q).Info("Select(): SELECT failed on DB.Query")
+		return err
 	}
 	defer func() {
 		rows.Close()
 	}()
 
-	ok := rows.Next()
-	if !ok {
-		return
-	}
-	found = true
-	err = rows.Scan(vals...)
-	if err != nil {
-		return
-	}
-	for i := 0; i < st.NumField(); i++ {
-		field := st.Field(i)
-		value := v.Field(i)
-		if !unicode.IsUpper(rune(field.Name[0])) {
-			continue
+	// Read the rows...
+	for {
+		ok := rows.Next()
+		if !ok {
+			break
 		}
-		newv := reflect.Indirect(reflect.ValueOf(vals[i]))
-		value.Set(newv)
+		err = rows.Scan(vals...)
+		if err != nil {
+			log.WithError(err).WithField("query", q).Info("Select(): SELECT failed to scan")
+			return err
+		}
+		log.Tracef("SELECT(): Record found and scanned.")
+		// Create the new slice element
+		newidx := reflect.New(st)
+		newidx = reflect.Indirect(newidx)
+
+		// For each struct tag, populate it.
+		for i := 0; i < st.NumField(); i++ {
+			field := st.Field(i)
+			if !unicode.IsUpper(rune(field.Name[0])) {
+				continue
+			}
+			newv := reflect.Indirect(reflect.ValueOf(vals[i]))
+			value := newidx.Field(i)
+			value.Set(newv)
+		}
+		retv = reflect.Append(retv, newidx)
 	}
-	return
+
+	// Finally - store the new slice to the pointer provided as input
+	setthis := reflect.Indirect(reflect.ValueOf(d))
+	setthis.Set(retv)
+	return nil
 }
 
 // Exists checks if a row where haystack matches the needle exists on the
@@ -117,6 +205,7 @@ func Exists(needle interface{}, haystack string, table string) (found bool, err 
 	q := fmt.Sprintf("SELECT * FROM %s WHERE %s = $1 LIMIT 1", table, haystack)
 	rows, err := DB.Query(q, needle)
 	if err != nil {
+		log.WithError(err).WithField("query", q).Info("Exists(): SELECT failed")
 		return
 	}
 	defer func() {
@@ -130,4 +219,25 @@ func Exists(needle interface{}, haystack string, table string) (found bool, err 
 	}
 	found = true
 	return
+}
+
+// Get is a convenience-wrapper for Select that return suitable
+// gondulapi-errors if the needle is the Zero-value, if the database-query
+// fails or if the item isn't found.
+//
+// It is provided so callers can implement receiver.Getter by simply
+// calling this to get reasonable default-behavior.
+func Get(needle interface{}, haystack string, table string, item interface{}) error {
+	value := reflect.ValueOf(needle)
+	if value.IsZero() {
+		return gondulapi.Errorf(400, "No item to look for provided")
+	}
+	found, err := Select(needle, haystack, table, item)
+	if err != nil {
+		return gondulapi.Errorf(500, "Database-query failed")
+	}
+	if !found {
+		return gondulapi.Errorf(404, "Couldn't find item %v", needle)
+	}
+	return nil
 }
