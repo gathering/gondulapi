@@ -119,8 +119,11 @@ func TestUpdate(t *testing.T) {
 	h.CheckEqual(t, *item.Vlan, 1)
 
 	*item.Vlan = 42
-	err = db.Update("e1-3", "sysname", "things", &item)
+	report, err := db.Update("e1-3", "sysname", "things", &item)
 	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, report.Affected, 1)
+	h.CheckEqual(t, report.Ok, 1)
+	h.CheckEqual(t, report.Failed, 0)
 
 	*item.Vlan = 0
 	found, err = db.Select("e1-3", "sysname", "things", &item)
@@ -129,8 +132,11 @@ func TestUpdate(t *testing.T) {
 	h.CheckEqual(t, *item.Vlan, 42)
 
 	*item.Vlan = 1
-	err = db.Update("e1-3", "sysname", "things", &item)
+	report, err = db.Update("e1-3", "sysname", "things", &item)
 	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, report.Affected, 1)
+	h.CheckEqual(t, report.Ok, 1)
+	h.CheckEqual(t, report.Failed, 0)
 
 	*item.Vlan = 0
 	found, err = db.Select("e1-3", "sysname", "things", &item)
@@ -156,23 +162,34 @@ func TestInsert(t *testing.T) {
 	newip, err := types.NewIP("192.168.2.1")
 	h.CheckEqual(t, err, nil)
 	item.Ip = &newip
-	err = db.Insert("things", &item)
+	report, err := db.Insert("things", &item)
 	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, report.Affected, 1)
+	h.CheckEqual(t, report.Ok, 1)
 
 	found, err = db.Select("kjeks", "sysname", "things", &item)
 	h.CheckEqual(t, err, nil)
 	h.CheckEqual(t, found, true)
 
-	err = db.Delete("kjeks", "sysname", "things")
+	report, err = db.Delete("kjeks", "sysname", "things")
 	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, report.Affected, 1)
+	h.CheckEqual(t, report.Ok, 1)
+	h.CheckEqual(t, report.Failed, 0)
 
-	err = db.Upsert("kjeks", "sysname", "things", &item)
+	report, err = db.Upsert("kjeks", "sysname", "things", &item)
 	h.CheckEqual(t, err, nil)
 	h.CheckEqual(t, *item.Vlan, 42)
+	h.CheckEqual(t, report.Affected, 1)
+	h.CheckEqual(t, report.Ok, 1)
+	h.CheckEqual(t, report.Failed, 0)
 
 	*item.Vlan = 8128
-	err = db.Upsert("kjeks", "sysname", "things", &item)
+	report, err = db.Upsert("kjeks", "sysname", "things", &item)
 	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, report.Affected, 1)
+	h.CheckEqual(t, report.Ok, 1)
+	h.CheckEqual(t, report.Failed, 0)
 
 	systems := make([]system, 0)
 	err = db.SelectMany("kjeks", "sysname", "things", &systems)
@@ -180,8 +197,11 @@ func TestInsert(t *testing.T) {
 	h.CheckEqual(t, len(systems), 1)
 	h.CheckEqual(t, *systems[0].Vlan, 8128)
 
-	err = db.Delete("kjeks", "sysname", "things")
+	report, err = db.Delete("kjeks", "sysname", "things")
 	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, report.Affected, 1)
+	h.CheckEqual(t, report.Ok, 1)
+	h.CheckEqual(t, report.Failed, 0)
 	db.DB.Close()
 	db.DB = nil
 }

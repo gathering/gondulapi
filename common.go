@@ -49,6 +49,14 @@ package gondulapi
 
 import "fmt"
 
+// Report is an update report on write-requests. The precise meaning might
+// vary, but the gist should be the same.
+type Report struct {
+	Affected int
+	Ok       int
+	Failed   int
+}
+
 // Getter implements Get method, which should fetch the object represented
 // by the element path.
 type Getter interface {
@@ -58,30 +66,36 @@ type Getter interface {
 // Putter is an idempotent method that requires an absolute path. It should
 // (over-)write the object found at the element path.
 type Putter interface {
-	Put(element string) error
+	Put(element string) (Report, error)
 }
 
 // Poster is not necessarily idempotent, but can be. It should write the
 // object provided, potentially generating a new ID for it if one isn't
 // provided in the data structure itself.
 type Poster interface {
-	Post() error
+	Post() (Report, error)
 }
 
 // Deleter should delete the object identified by the element. It should be
 // idempotent, in that it should be safe to call it on already-deleted
 // items.
 type Deleter interface {
-	Delete(element string) error
+	Delete(element string) (Report, error)
 }
 
 // Errorf is a convenience-function to provide an Error data structure,
 // which is essentially the same as fmt.Errorf(), but with an HTTP status
 // code embedded into it which can be extracted.
 func Errorf(code int, str string, v ...interface{}) Error {
+	return Errori(code, fmt.Sprintf(str, v...))
+}
+
+// Errori creates an error with the given status-code, with i as the
+// message. i should either be a text string or implement fmt.Stringer
+func Errori(code int, i interface{}) Error {
 	e := Error{
 		Code:    code,
-		Message: fmt.Sprintf(str, v...),
+		Message: i,
 	}
 	return e
 }
@@ -89,7 +103,7 @@ func Errorf(code int, str string, v ...interface{}) Error {
 // Error is used to combine a text-based error with a HTTP error code.
 type Error struct {
 	Code    int
-	Message string
+	Message interface{}
 }
 
 // InternalError is provided for the common case of returning an opaque
@@ -99,5 +113,12 @@ var InternalError = Error{500, "Internal Server Error"}
 // Error allows Error to implement the error interface. That's a whole lot
 // of error in one sentence...
 func (e Error) Error() string {
-	return e.Message
+	if m, ok := e.Message.(string); ok {
+		return m
+	}
+	if m, ok := e.Message.(fmt.Stringer); ok {
+		return m.String()
+	}
+
+	return fmt.Sprintf("%v", e.Message)
 }

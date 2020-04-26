@@ -113,11 +113,13 @@ func enumerate(haystack string, populate bool, d interface{}) (keyvals, error) {
 // Update attempts to update the object in the database, using the provided
 // string and matching the haystack with the needle. It skips fields that
 // are nil-pointers.
-func Update(needle interface{}, haystack string, table string, d interface{}) error {
+func Update(needle interface{}, haystack string, table string, d interface{}) (gondulapi.Report, error) {
 	kvs, err := enumerate(haystack, false, d)
+	report := gondulapi.Report{}
 	if err != nil {
 		log.WithError(err).Error("Update(): enumerate() failed")
-		return gondulapi.InternalError
+		report.Failed++
+		return report, gondulapi.InternalError
 	}
 	lead := fmt.Sprintf("UPDATE %s SET ", table)
 	comma := ""
@@ -129,12 +131,16 @@ func Update(needle interface{}, haystack string, table string, d interface{}) er
 	}
 	lead = fmt.Sprintf("%s WHERE %s = $%d", lead, haystack, last+2)
 	kvs.values = append(kvs.values, needle)
-	_, err = DB.Exec(lead, kvs.values...)
+	res, err := DB.Exec(lead, kvs.values...)
 	if err != nil {
 		log.WithError(err).WithField("lead", lead).Error("Update(): EXEC failed")
-		return gondulapi.InternalError
+		report.Failed++
+		return report, gondulapi.InternalError
 	}
-	return nil
+	rowsaf, _ := res.RowsAffected()
+	report.Ok++
+	report.Affected += int(rowsaf)
+	return report, nil
 }
 
 // Insert adds the object to the table specified. It only provides the
@@ -143,11 +149,13 @@ func Update(needle interface{}, haystack string, table string, d interface{}) er
 // if an object already exists, so it will happily make duplicates -
 // your database schema should prevent that, and calling code should
 // check if that is not the desired behavior.
-func Insert(table string, d interface{}) error {
+func Insert(table string, d interface{}) (gondulapi.Report, error) {
+	report := gondulapi.Report{}
 	kvs, err := enumerate("-", false, d)
 	if err != nil {
 		log.WithError(err).Error("Insert(): Enumerate failed")
-		return gondulapi.InternalError
+		report.Failed++
+		return report, gondulapi.InternalError
 	}
 	lead := fmt.Sprintf("INSERT INTO %s (", table)
 	middle := ""
@@ -158,12 +166,15 @@ func Insert(table string, d interface{}) error {
 		comma = ", "
 	}
 	lead = fmt.Sprintf("%s) VALUES(%s)", lead, middle)
-	_, err = DB.Exec(lead, kvs.values...)
+	res, err := DB.Exec(lead, kvs.values...)
 	if err != nil {
 		log.WithError(err).WithField("lead", lead).Error("Insert(): EXEC failed")
-		return gondulapi.InternalError
+		return report, gondulapi.InternalError
 	}
-	return nil
+	rowsaf, _ := res.RowsAffected()
+	report.Ok++
+	report.Affected += int(rowsaf)
+	return report, nil
 }
 
 // Upsert makes database-people cringe by first checking if an element
@@ -179,10 +190,10 @@ func Insert(table string, d interface{}) error {
 // still attempt an UPDATE, which will fail silently (for now). This can be
 // handled by a front-end doing a double-check, or by just assuming it
 // doesn't happen often enough to be worth fixing.
-func Upsert(needle interface{}, haystack string, table string, d interface{}) error {
+func Upsert(needle interface{}, haystack string, table string, d interface{}) (gondulapi.Report, error) {
 	found, err := Exists(needle, haystack, table)
 	if err != nil {
-		return gondulapi.InternalError
+		return gondulapi.Report{Failed: 1}, gondulapi.InternalError
 	}
 	if found {
 		return Update(needle, haystack, table, d)
@@ -191,12 +202,17 @@ func Upsert(needle interface{}, haystack string, table string, d interface{}) er
 }
 
 // Delete will delete the element, and will also delete duplicates.
-func Delete(needle interface{}, haystack string, table string) (err error) {
+func Delete(needle interface{}, haystack string, table string) (gondulapi.Report, error) {
+	report := gondulapi.Report{}
 	q := fmt.Sprintf("DELETE FROM %s WHERE %s = $1", table, haystack)
-	_, err = DB.Exec(q, needle)
+	res, err := DB.Exec(q, needle)
 	if err != nil {
+		report.Failed++
 		log.WithError(err).WithField("query", q).Error("Delete(): Query failed")
-		return gondulapi.InternalError
+		return report, gondulapi.InternalError
 	}
-	return nil
+	rowsaf, _ := res.RowsAffected()
+	report.Ok++
+	report.Affected += int(rowsaf)
+	return report, nil
 }

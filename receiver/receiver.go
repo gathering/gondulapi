@@ -134,11 +134,16 @@ func handle(item interface{}, input input, path string) (output output) {
 			return
 		}
 		code := 400
-		if gerr, ok := err.(gondulapi.Error); ok {
+		gerr, havegerr := err.(gondulapi.Error)
+		if havegerr {
 			code = gerr.Code
 		}
 		output.code = code
 		if output.data == nil {
+			if code == 200 && havegerr {
+				output.data = gerr.Message
+				return
+			}
 			m := message("%s on %s failed", input.method, path)
 			if err != nil {
 				m.Error = fmt.Sprintf("%v", err)
@@ -167,10 +172,11 @@ func handle(item interface{}, input input, path string) (output output) {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
 		}
-		err = put.Put(input.url.Path[len(path):])
+		report, err := put.Put(input.url.Path[len(path):])
 		if err != nil {
 			return
 		}
+		output.data = report
 		output.failed = false
 	} else if input.method == "DELETE" {
 		del, ok := item.(gondulapi.Deleter)
@@ -178,10 +184,11 @@ func handle(item interface{}, input input, path string) (output output) {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
 		}
-		err = del.Delete(input.url.Path[len(path):])
+		report, err := del.Delete(input.url.Path[len(path):])
 		if err != nil {
 			return
 		}
+		output.data = report
 		output.failed = false
 	} else if input.method == "POST" {
 		err = json.Unmarshal(input.data, &item)
@@ -193,10 +200,11 @@ func handle(item interface{}, input input, path string) (output output) {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
 		}
-		err = post.Post()
+		report, err := post.Post()
 		if err != nil {
 			return
 		}
+		output.data = report
 		output.failed = false
 	}
 	return
