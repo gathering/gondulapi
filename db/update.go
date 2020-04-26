@@ -67,7 +67,7 @@ func enumerate(haystack string, populate bool, d interface{}) (keyvals, error) {
 	kvs := keyvals{}
 	if st.Kind() != reflect.Struct {
 		log.Printf("Got the wrong data type. Got %s / %T.", st.Kind(), d)
-		return kvs, gondulapi.Errorf(500, "Internal Server Error")
+		return kvs,gondulapi.InternalError
 	}
 
 	kvs.keys = make([]string, 0)
@@ -110,7 +110,7 @@ func Update(needle interface{}, haystack string, table string, d interface{}) er
 	kvs, err := enumerate(haystack, false, d)
 	if err != nil {
 		log.WithError(err).Error("Update(): enumerate() failed")
-		return err
+		return gondulapi.InternalError
 	}
 	lead := fmt.Sprintf("UPDATE %s SET ", table)
 	comma := ""
@@ -124,9 +124,8 @@ func Update(needle interface{}, haystack string, table string, d interface{}) er
 	kvs.values = append(kvs.values, needle)
 	_, err = DB.Exec(lead, kvs.values...)
 	if err != nil {
-		log.Printf("DB.Exec(\"%s\",kvs.values...) failed: %v", lead, err)
 		log.WithError(err).WithField("lead", lead).Error("Update(): EXEC failed")
-		return err
+		return gondulapi.InternalError
 	}
 	return nil
 }
@@ -138,7 +137,7 @@ func Insert(table string, d interface{}) error {
 	kvs, err := enumerate("-", false, d)
 	if err != nil {
 		log.WithError(err).Error("Insert(): Enumerate failed")
-		return err
+		return gondulapi.InternalError
 	}
 	lead := fmt.Sprintf("INSERT INTO %s (", table)
 	middle := ""
@@ -152,7 +151,7 @@ func Insert(table string, d interface{}) error {
 	_, err = DB.Exec(lead, kvs.values...)
 	if err != nil {
 		log.WithError(err).WithField("lead", lead).Error("Insert(): EXEC failed")
-		return err
+		return gondulapi.InternalError
 	}
 	return nil
 }
@@ -173,7 +172,7 @@ func Insert(table string, d interface{}) error {
 func Upsert(needle interface{}, haystack string, table string, d interface{}) error {
 	found, err := Exists(needle, haystack, table)
 	if err != nil {
-		return err
+		return gondulapi.InternalError
 	}
 	if found {
 		return Update(needle, haystack, table, d)
@@ -187,7 +186,7 @@ func Delete(needle interface{}, haystack string, table string) (err error) {
 	_, err = DB.Exec(q, needle)
 	if err != nil {
 		log.WithError(err).WithField("query", q).Error("Delete(): Query failed")
-		return
+		return gondulapi.InternalError
 	}
 	return nil
 }

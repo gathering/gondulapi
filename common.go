@@ -64,6 +64,10 @@ type Error struct {
 	Message string
 }
 
+// InternalError is provided for the common case of returning an opaque
+// error that can be passed to a user.
+var InternalError = Error{500, "Internal Server Error"}
+
 // Error allows Error to implement the error interface. That's a whole lot
 // of error in one sentence...
 func (e Error) Error() string {

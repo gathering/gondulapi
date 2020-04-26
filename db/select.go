@@ -54,7 +54,7 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 	st := reflect.ValueOf(d)
 	if st.Kind() != reflect.Ptr {
 		log.Error("Select() called with non-pointer interface. This wouldn't really work.")
-		return false, gondulapi.Errorf(500, "Internal server error")
+		return false,gondulapi.InternalError
 	}
 	st = reflect.Indirect(st)
 
@@ -67,7 +67,7 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 
 	if err != nil {
 		log.WithError(err).Error("Call to SelectMany() from Select() failed.")
-		return false, gondulapi.Errorf(500, "Internal server error")
+		return false,gondulapi.InternalError
 	}
 	// retvi will be overwritten with the response (because that's how
 	// append works), so retv now points to the empty original - update
@@ -107,14 +107,14 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 func SelectMany(needle interface{}, haystack string, table string, d interface{}) error {
 	if DB == nil {
 		log.Errorf("Tried to issue SelectMany() without a DB object")
-		return gondulapi.Errorf(500, "Internal server error")
+		return gondulapi.InternalError
 	}
 	dval := reflect.ValueOf(d)
 	// This is needed because we need to be able to update with a
 	// potentially new slice.
 	if dval.Kind() != reflect.Ptr {
 		log.Errorf("SelectMany() called with non-pointer interface. This wouldn't really work. Got %T", d)
-		return gondulapi.Errorf(500, "Internal server error")
+		return gondulapi.InternalError
 	}
 	dval = reflect.Indirect(dval)
 
@@ -126,7 +126,7 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 	// And obviously it needs to actually be a slice.
 	if dval.Kind() != reflect.Slice {
 		log.Errorf("SelectMany() must be called with pointer-to-slice, e.g: &[]foo, got: %T inner is: %v / %#v / %s / kind: %s", d, dval, dval, dval, dval.Kind())
-		return gondulapi.Errorf(500, "Internal server error")
+		return gondulapi.InternalError
 	}
 
 	// st stores the type we need to return an array, while fieldList
@@ -149,7 +149,7 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 	kvs, err := enumerate("-", true, &sampleUnderscoreRaw)
 	if err != nil {
 		log.WithError(err).Errorf("enumerate() failed during query. This is bad.")
-		return gondulapi.Errorf(500, "Internal Server Error")
+		return gondulapi.InternalError
 	}
 	for idx := range kvs.keys {
 		keys = fmt.Sprintf("%s%s%s", keys, comma, kvs.keys[idx])
@@ -160,7 +160,7 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 	rows, err := DB.Query(q, needle)
 	if err != nil {
 		log.WithError(err).WithField("query", q).Info("Select(): SELECT failed on DB.Query")
-		return err
+		return gondulapi.InternalError
 	}
 	defer func() {
 		rows.Close()
@@ -175,7 +175,7 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 		err = rows.Scan(kvs.newvals...)
 		if err != nil {
 			log.WithError(err).WithField("query", q).Info("Select(): SELECT failed to scan")
-			return err
+			return gondulapi.InternalError
 		}
 		log.Tracef("SELECT(): Record found and scanned.")
 
@@ -215,7 +215,7 @@ func Exists(needle interface{}, haystack string, table string) (found bool, err 
 	rows, err := DB.Query(q, needle)
 	if err != nil {
 		log.WithError(err).WithField("query", q).Info("Exists(): SELECT failed")
-		return
+		return false,gondulapi.InternalError
 	}
 	defer func() {
 		// XXX: Unsure if this is actually needed here, to be
@@ -224,7 +224,7 @@ func Exists(needle interface{}, haystack string, table string) (found bool, err 
 	}()
 	ok := rows.Next()
 	if !ok {
-		return
+		return false,nil
 	}
 	found = true
 	return
@@ -243,7 +243,7 @@ func Get(needle interface{}, haystack string, table string, item interface{}) er
 	}
 	found, err := Select(needle, haystack, table, item)
 	if err != nil {
-		return gondulapi.Errorf(500, "Database-query failed")
+		return gondulapi.InternalError
 	}
 	if !found {
 		return gondulapi.Errorf(404, "Couldn't find item %v", needle)
