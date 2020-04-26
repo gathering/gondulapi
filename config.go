@@ -21,8 +21,9 @@ package gondulapi
 
 import (
 	"encoding/json"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // Config covers global configuration, and if need be it will provide

@@ -17,6 +17,34 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+/*
+Package gondulapi provides the framework for building a HTTP REST-API
+backed by a Postgresql Database. The package can be split into three:
+
+1. The HTTP bit, found in receiver/. This deals with accepting HTTP
+requests, parsing requests and mapping them to data types. It ensures proper division
+of labour, and makes it less easy to make inconsistent APIs by enforcing that
+if you GET something on an URL, PUT or POST to the same URL will accept the
+exact same data type back. In other words, you can do:
+
+	GET http://foo/blatti/x > file
+	vim file // Change a field
+	lwp-request -m PUT http://foo/blatti/x < file
+
+And it will do what you expect, assuming the datastructure implements both
+the Getter-interface and the Putter interface.
+
+2. The SQL bit, found in db/. This is an attempt to use reflection to avoid
+having to write database queries by hand. It is not meant to cover 100% of
+all SQL access. Since it makes mapping a Go data type to an SQL table easy,
+it is meant to inspire good database models, where the API can mostly just
+get items back and forth.
+
+3. "Misc" - or maybe I should say, the actual Gondul API. Which at this
+moment isn't actually written. Some other bits fall under this category
+though, such as config file management and logging. Not very exotic.
+
+*/
 package gondulapi
 
 import "fmt"

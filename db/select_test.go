@@ -20,11 +20,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 package db_test
 
 import (
+	"testing"
+
 	"github.com/gathering/gondulapi/db"
 	h "github.com/gathering/gondulapi/helper"
 	"github.com/gathering/gondulapi/types"
 	log "github.com/sirupsen/logrus"
-	"testing"
 )
 
 func init() {

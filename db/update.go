@@ -37,6 +37,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 // package's interfaces for scanning results and packing data types. So if
 // your data types implement sql.Scanner and sql/driver.Value, you can use
 // them directly with 0 extra boiler-plate.
+//
+// To use it, you need a struct datatype with at least some exported
+// fields that map to a database table. If your field names don't match
+// the column name, you can tag the struct fields with
+// `column:"alternatename"`. If you wish to have this package ignore the
+// field entirely (e.g.: it's exported, but doesn't exist at all in the
+// database), tag it with `column:"-"`.
 package db
 
 import (
@@ -67,7 +74,7 @@ func enumerate(haystack string, populate bool, d interface{}) (keyvals, error) {
 	kvs := keyvals{}
 	if st.Kind() != reflect.Struct {
 		log.Printf("Got the wrong data type. Got %s / %T.", st.Kind(), d)
-		return kvs,gondulapi.InternalError
+		return kvs, gondulapi.InternalError
 	}
 
 	kvs.keys = make([]string, 0)
@@ -132,7 +139,10 @@ func Update(needle interface{}, haystack string, table string, d interface{}) er
 
 // Insert adds the object to the table specified. It only provides the
 // non-nil-pointer objects as fields, so it is up to the caller and the
-// database schema to enforce default values.
+// database schema to enforce default values. It also does not check
+// if an object already exists, so it will happily make duplicates -
+// your database schema should prevent that, and calling code should
+// check if that is not the desired behavior.
 func Insert(table string, d interface{}) error {
 	kvs, err := enumerate("-", false, d)
 	if err != nil {

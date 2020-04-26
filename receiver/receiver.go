@@ -24,10 +24,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/gathering/gondulapi"
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/gathering/gondulapi"
 
 	log "github.com/sirupsen/logrus"
 )

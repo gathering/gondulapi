@@ -21,13 +21,14 @@ package db
 
 import (
 	"fmt"
+	"reflect"
+
 	"github.com/gathering/gondulapi"
 	log "github.com/sirupsen/logrus"
-	"reflect"
 )
 
-// Select populates the provided interface(should be a pointer) by
-// performing a simple select on the table, matching haystack with needle.
+// Select populates the provided interface(should be a pointer to a struct)
+// by performing a simple select on the table, matching haystack with needle.
 // E.g: select (elements of d) from table where haystack = needle;
 //
 // It is not particularly fast, and uses reflection. It is well suited for
@@ -54,7 +55,7 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 	st := reflect.ValueOf(d)
 	if st.Kind() != reflect.Ptr {
 		log.Error("Select() called with non-pointer interface. This wouldn't really work.")
-		return false,gondulapi.InternalError
+		return false, gondulapi.InternalError
 	}
 	st = reflect.Indirect(st)
 
@@ -67,7 +68,7 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 
 	if err != nil {
 		log.WithError(err).Error("Call to SelectMany() from Select() failed.")
-		return false,gondulapi.InternalError
+		return false, gondulapi.InternalError
 	}
 	// retvi will be overwritten with the response (because that's how
 	// append works), so retv now points to the empty original - update
@@ -215,7 +216,7 @@ func Exists(needle interface{}, haystack string, table string) (found bool, err 
 	rows, err := DB.Query(q, needle)
 	if err != nil {
 		log.WithError(err).WithField("query", q).Info("Exists(): SELECT failed")
-		return false,gondulapi.InternalError
+		return false, gondulapi.InternalError
 	}
 	defer func() {
 		// XXX: Unsure if this is actually needed here, to be
@@ -224,7 +225,7 @@ func Exists(needle interface{}, haystack string, table string) (found bool, err 
 	}()
 	ok := rows.Next()
 	if !ok {
-		return false,nil
+		return false, nil
 	}
 	found = true
 	return

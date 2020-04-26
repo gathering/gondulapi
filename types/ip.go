@@ -17,6 +17,15 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+// Package types provides a set of common data types that implement the
+// relevant interfaces for use within gondulapi.
+//
+// In general, that means implementing JSON marshaling/unmarshaling and
+// database/sql's Scanner and driver.Value interface for SQL operations.
+//
+// Any data type that implement JSON marshaling and can be handled by SQL
+// can be used without any further scaffolding. So these data types are
+// just a bit outside of the norm.
 package types
 
 import (

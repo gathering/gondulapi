@@ -20,9 +20,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 package types_test
 
 import (
+	"testing"
+
 	h "github.com/gathering/gondulapi/helper"
 	"github.com/gathering/gondulapi/types"
-	"testing"
 )
 
 func TestBox(t *testing.T) {

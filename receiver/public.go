@@ -43,9 +43,10 @@ package receiver
 
 import (
 	"fmt"
+	"net/http"
+
 	gapi "github.com/gathering/gondulapi"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
 // AddHandler registeres an allocator/data structure with a url. The
