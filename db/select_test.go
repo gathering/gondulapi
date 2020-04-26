@@ -31,9 +31,13 @@ func init() {
 	log.SetLevel(log.TraceLevel)
 }
 
+// system is not completely random. Having Ignored in the middle is
+// important to properly test ignored fields and the accounting, which has
+// been buggy in the past.
 type system struct {
 	Sysname   string
 	Ip        *types.IP
+	Ignored	  *string `column:"-"`
 	Vlan      *int
 	Placement *types.Box
 }
@@ -98,4 +102,5 @@ func TestSelect(t *testing.T) {
 	h.CheckEqual(t, err, nil)
 	h.CheckEqual(t, found, true)
 	h.CheckEqual(t, item.Sysname, "e1-3")
+	h.CheckEqual(t, *item.Vlan, 1)
 }

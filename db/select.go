@@ -159,6 +159,9 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 		if ncol, ok := field.Tag.Lookup("column"); ok {
 			col = ncol
 		}
+		if col == "-" {
+			continue
+		}
 		keys = fmt.Sprintf("%s%s%s", keys, comma, col)
 		comma = ", "
 		value := reflect.New(field.Type)
@@ -200,15 +203,25 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 			newval = reflect.Indirect(newval)
 		}
 
+
+		validx := 0
 		// For each struct tag, populate it.
 		for i := 0; i < fieldList.NumField(); i++ {
 			field := fieldList.Field(i)
 			if !unicode.IsUpper(rune(field.Name[0])) {
 				continue
 			}
-			newv := reflect.Indirect(reflect.ValueOf(vals[i]))
+			col := field.Name
+			if ncol, ok := field.Tag.Lookup("column"); ok {
+				col = ncol
+			}
+			if col == "-" {
+				continue
+			}
+			newv := reflect.Indirect(reflect.ValueOf(vals[validx]))
 			value := newval.Field(i)
 			value.Set(newv)
+			validx++
 		}
 		retv = reflect.Append(retv, newidx)
 	}
