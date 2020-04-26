@@ -24,7 +24,6 @@ import (
 	"github.com/gathering/gondulapi"
 	log "github.com/sirupsen/logrus"
 	"reflect"
-	"unicode"
 )
 
 // Select populates the provided interface(should be a pointer) by
@@ -67,7 +66,8 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 	err = SelectMany(needle, haystack, table, &retvi)
 
 	if err != nil {
-		return false, err
+		log.WithError(err).Error("Call to SelectMany() from Select() failed.")
+		return false, gondulapi.Errorf(500, "Internal server error")
 	}
 	// retvi will be overwritten with the response (because that's how
 	// append works), so retv now points to the empty original - update
@@ -143,29 +143,17 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 	// We make a new slice - this is what we will actually return/set
 	retv := reflect.MakeSlice(reflect.SliceOf(st), 0, 0)
 
-	// This is used to temporarily hold the values as they are scanned.
-	// We need it to get the correct types for the sql driver to Scan into.
-	vals := make([]interface{}, 0)
-	keys := ""
-	comma := ""
-
-	// Iterate over the struct - store the keys, and populate vals.
-	for i := 0; i < fieldList.NumField(); i++ {
-		field := fieldList.Field(i)
-		if !unicode.IsUpper(rune(field.Name[0])) {
-			continue
-		}
-		col := field.Name
-		if ncol, ok := field.Tag.Lookup("column"); ok {
-			col = ncol
-		}
-		if col == "-" {
-			continue
-		}
-		keys = fmt.Sprintf("%s%s%s", keys, comma, col)
-		comma = ", "
-		value := reflect.New(field.Type)
-		vals = append(vals, value.Interface())
+	keys, comma := "", ""
+	sample := reflect.New(fieldList)
+	sampleUnderscoreRaw := sample.Interface()
+	kvs, err := enumerate("-", true, &sampleUnderscoreRaw)
+	if err != nil {
+		log.WithError(err).Errorf("enumerate() failed during query. This is bad.")
+		return gondulapi.Errorf(500, "Internal Server Error")
+	}
+	for idx := range kvs.keys {
+		keys = fmt.Sprintf("%s%s%s", keys, comma, kvs.keys[idx])
+		comma = ","
 	}
 	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1", keys, table, haystack)
 	log.WithField("query", q).Tracef("Select()")
@@ -184,12 +172,13 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 		if !ok {
 			break
 		}
-		err = rows.Scan(vals...)
+		err = rows.Scan(kvs.newvals...)
 		if err != nil {
 			log.WithError(err).WithField("query", q).Info("Select(): SELECT failed to scan")
 			return err
 		}
 		log.Tracef("SELECT(): Record found and scanned.")
+
 		// Create the new slice element
 		newidx := reflect.New(st)
 		newidx = reflect.Indirect(newidx)
@@ -203,25 +192,10 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 			newval = reflect.Indirect(newval)
 		}
 
-
-		validx := 0
-		// For each struct tag, populate it.
-		for i := 0; i < fieldList.NumField(); i++ {
-			field := fieldList.Field(i)
-			if !unicode.IsUpper(rune(field.Name[0])) {
-				continue
-			}
-			col := field.Name
-			if ncol, ok := field.Tag.Lookup("column"); ok {
-				col = ncol
-			}
-			if col == "-" {
-				continue
-			}
-			newv := reflect.Indirect(reflect.ValueOf(vals[validx]))
-			value := newval.Field(i)
+		for idx := range kvs.newvals {
+			newv := reflect.Indirect(reflect.ValueOf(kvs.newvals[idx]))
+			value := newval.Field(kvs.keyidx[idx])
 			value.Set(newv)
-			validx++
 		}
 		retv = reflect.Append(retv, newidx)
 	}

@@ -44,22 +44,32 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/gathering/gondulapi"
 	log "github.com/sirupsen/logrus"
 )
 
 type keyvals struct {
-	keys   []string
-	values []interface{}
+	keys    []string // name
+	keyidx  []int    // mapping from our index to struct-index (in case of skipping)
+	values  []interface{}
+	newvals []interface{}
 }
 
-func enumerate(haystack string, all bool, d interface{}) (keyvals, error) {
-	st := reflect.TypeOf(d)
+func enumerate(haystack string, populate bool, d interface{}) (keyvals, error) {
 	v := reflect.ValueOf(d)
-	if st.Kind() == reflect.Ptr {
-		st = st.Elem()
+	v = reflect.Indirect(v)
+	if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+	v = reflect.Indirect(v)
+
+	st := v.Type()
+	kvs := keyvals{}
+	if st.Kind() != reflect.Struct {
+		log.Printf("Got the wrong data type. Got %s / %T.", st.Kind(), d)
+		return kvs, gondulapi.Errorf(500, "Internal Server Error")
 	}
 
-	kvs := keyvals{}
 	kvs.keys = make([]string, 0)
 	kvs.values = make([]interface{}, 0)
 
@@ -73,19 +83,22 @@ func enumerate(haystack string, all bool, d interface{}) (keyvals, error) {
 		if ncol, ok := field.Tag.Lookup("column"); ok {
 			col = ncol
 		}
-
-		if field.Type.Kind() == reflect.Ptr && value.IsNil() {
-			if !all {
-				continue
-			}
-		} else {
-			value = reflect.Indirect(value)
-		}
 		if col == haystack || col == "-" {
 			continue
 		}
+
+		if field.Type.Kind() == reflect.Ptr && value.IsNil() {
+			if !populate {
+				continue
+			}
+			value = reflect.New(field.Type.Elem())
+		} else {
+			value = reflect.Indirect(value)
+		}
 		kvs.keys = append(kvs.keys, col)
 		kvs.values = append(kvs.values, value.Interface())
+		kvs.newvals = append(kvs.newvals, reflect.New(value.Type()).Interface())
+		kvs.keyidx = append(kvs.keyidx, i)
 	}
 	return kvs, nil
 }

@@ -37,7 +37,7 @@ func init() {
 type system struct {
 	Sysname   string
 	Ip        *types.IP
-	Ignored	  *string `column:"-"`
+	Ignored   *string `column:"-"`
 	Vlan      *int
 	Placement *types.Box
 }
@@ -103,4 +103,84 @@ func TestSelect(t *testing.T) {
 	h.CheckEqual(t, found, true)
 	h.CheckEqual(t, item.Sysname, "e1-3")
 	h.CheckEqual(t, *item.Vlan, 1)
+	db.DB.Close()
+	db.DB = nil
+}
+
+func TestUpdate(t *testing.T) {
+	item := system{}
+	err := db.Connect()
+	h.CheckEqual(t, err, nil)
+
+	found, err := db.Select("e1-3", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, found, true)
+	h.CheckEqual(t, *item.Vlan, 1)
+
+	*item.Vlan = 42
+	err = db.Update("e1-3", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+
+	*item.Vlan = 0
+	found, err = db.Select("e1-3", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, found, true)
+	h.CheckEqual(t, *item.Vlan, 42)
+
+	*item.Vlan = 1
+	err = db.Update("e1-3", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+
+	*item.Vlan = 0
+	found, err = db.Select("e1-3", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, found, true)
+	h.CheckEqual(t, *item.Vlan, 1)
+	db.DB.Close()
+	db.DB = nil
+}
+
+func TestInsert(t *testing.T) {
+	item := system{}
+	err := db.Connect()
+	h.CheckEqual(t, err, nil)
+
+	found, err := db.Select("kjeks", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, found, false)
+
+	item.Sysname = "kjeks"
+	vlan := 42
+	item.Vlan = &vlan
+	newip, err := types.NewIP("192.168.2.1")
+	h.CheckEqual(t, err, nil)
+	item.Ip = &newip
+	err = db.Insert("things", &item)
+	h.CheckEqual(t, err, nil)
+
+	found, err = db.Select("kjeks", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, found, true)
+
+	err = db.Delete("kjeks", "sysname", "things")
+	h.CheckEqual(t, err, nil)
+
+	err = db.Upsert("kjeks", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, *item.Vlan, 42)
+
+	*item.Vlan = 8128
+	err = db.Upsert("kjeks", "sysname", "things", &item)
+	h.CheckEqual(t, err, nil)
+
+	systems := make([]system, 0)
+	err = db.SelectMany("kjeks", "sysname", "things", &systems)
+	h.CheckEqual(t, err, nil)
+	h.CheckEqual(t, len(systems), 1)
+	h.CheckEqual(t, *systems[0].Vlan, 8128)
+
+	err = db.Delete("kjeks", "sysname", "things")
+	h.CheckEqual(t, err, nil)
+	db.DB.Close()
+	db.DB = nil
 }

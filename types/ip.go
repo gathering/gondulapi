@@ -86,3 +86,10 @@ func (i *IP) UnmarshalText(b []byte) error {
 	i.IP = ip
 	return nil
 }
+
+// NewIP parses the text string and returns it as an IP data structure
+func NewIP(src string) (IP, error) {
+	i := IP{}
+	err := i.UnmarshalText([]byte(src))
+	return i, err
+}
