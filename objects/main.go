@@ -27,20 +27,19 @@ objects can't be exported like any other.
 An object is a data structure that implements one of Putter, Getter, Poster
 and Deleter from gondulapi to do RESTful stuff.
 
-This file demonstrates three things:
+This file demonstrates two things:
 
 1. How to implement basic GET/PUT/POST/DELETE using gondulapi/receiver.
 
 2. How to use the simplified gondulapi/db methods to map your own interface
 directly to a database element without writing SQL.
 
-3. Implementing custom-types that are supported implicitly by gondulapi/db.
-
+See types/ for how to implement custom-types not already supported by
+database/sql.
 */
 package objects
 
 import (
-	"database/sql/driver"
 	"fmt"
 	"github.com/gathering/gondulapi"
 	"github.com/gathering/gondulapi/db"
@@ -82,48 +81,11 @@ type Thing struct {
 	Sysname   string
 	MgmtIP    *types.IP `column:"ip"`
 	Vlan      *int
-	Placement *ThingPlacement
+	Placement *types.Box
 }
 
 // Things demonstrates how to fetch multiple items at the same time.
 type Things []Thing
-
-// ThingPlacement illustrates nested data structures which are implicitly
-// handled, and, also mimicks the placement logic of switches in Gondul,
-// which use an X1/X2 Y1/Y2 coordinate system to determine left-most and
-// right-most X and top-most and bottom-most Y.
-//
-// Please note that Postgresql will always place the upper right corner
-// first - so X1/Y1 might be X2/Y2 when you read it back out - but the
-// semantics are correct.
-type ThingPlacement struct {
-	X1 int
-	X2 int
-	Y1 int
-	Y2 int
-}
-
-// Scan implements sql.Scan to enable gondulapi/db to read the SQL directly
-// into our custom type.
-func (tp *ThingPlacement) Scan(src interface{}) error {
-	switch value := src.(type) {
-	case []byte:
-		str := string(value)
-		_, err := fmt.Sscanf(str, "(%d,%d),(%d,%d)", &tp.X1, &tp.Y1, &tp.X2, &tp.Y2)
-		return err
-	default:
-		return fmt.Errorf("invalid IP")
-	}
-}
-
-// Value implements sql/driver's Value interface to provide implicit
-// support for writing the value.
-//
-// In other words: Scan() enables SELECT and Value() allows INSERT/UPDATE.
-func (tp ThingPlacement) Value() (driver.Value, error) {
-	x := fmt.Sprintf("((%d,%d),(%d,%d))", tp.X1, tp.Y1, tp.X2, tp.Y2)
-	return x, nil
-}
 
 func init() {
 	// This is how we register for a url. The url is the same as used
@@ -132,18 +94,6 @@ func init() {
 	// model.
 	receiver.AddHandler("/thing/", func() interface{} { return &Thing{} })
 	receiver.AddHandler("/things/", func() interface{} { return &Things{} })
-}
-
-// Get uses SelectMany to fetch multiple rows. For this, "b" has to be a
-// pointer to a slice, which it happens to be here (It's []Thing,
-// remember).
-func (b *Things) Get(element string) error {
-	if element == "" {
-		// Ok this is a bit of a hack, as it uses "WHERE 1 = 1" to
-		// avoid having an other function without conditions.
-		return db.SelectMany(1, "1", "things", b)
-	}
-	return db.SelectMany(element, "vlan", "things", b)
 }
 
 // Get is called on GET. b will be an empty thing. Fill it out, using the
@@ -188,4 +138,16 @@ func (b Thing) Delete(element string) error {
 		fmt.Printf("delete lolz: %v\n", err)
 	}
 	return err
+}
+
+// Get uses SelectMany to fetch multiple rows. For this, "b" has to be a
+// pointer to a slice, which it happens to be here (It's []Thing,
+// remember).
+func (b *Things) Get(element string) error {
+	if element == "" {
+		// Ok this is a bit of a hack, as it uses "WHERE 1 = 1" to
+		// avoid having an other function without conditions.
+		return db.SelectMany(1, "1", "things", b)
+	}
+	return db.SelectMany(element, "vlan", "things", b)
 }

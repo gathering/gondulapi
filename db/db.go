@@ -32,23 +32,42 @@ import (
 // DB is the main database handle used throughout the API
 var DB *sql.DB
 
+// Ping is a wrapper for DB.Ping: it checks that the database is alive.
+// It's provided to add standard gondulapi-logging and error-types that can
+// be exposed to users.
+func Ping() error {
+	if DB == nil {
+		log.Warn("Ping() issued without a valid DB. Use Connect() first.")
+		return gapi.Error{500, "Failed to communicate with the database"}
+	}
+	err := DB.Ping()
+	if err != nil {
+		log.Printf("Failed to ping the database: %v", err)
+		return gapi.Error{500, "Failed to communicate with the database"}
+	}
+	log.Tracef("Ping() of db successful")
+	return nil
+}
+
 // Connect sets up the database connection, using the configured
 // ConnectionString, and ensures it is working.
 func Connect() error {
 	var err error
+	// Mainly allowed because testing can easily trigger multiple
+	// connects.
+	if DB != nil {
+		log.Warn("Got superfluous db.Connect(). Running a ping and hoping for the best.")
+		return Ping()
+	}
+
 	if gapi.Config.ConnectionString == "" {
-		log.Printf("Using default connection string for debug purposes")
+		log.Warn("Using default connection string for debug purposes. Relax, it's a very secure set of credentials.")
 		gapi.Config.ConnectionString = "user=kly password=lolkek dbname=klytest sslmode=disable"
 	}
 	DB, err = sql.Open("postgres", gapi.Config.ConnectionString)
 	if err != nil {
-		log.Printf("Failed to connect to database: %v", err)
+		log.Warnf("Failed to connect to database: %v", err)
 		return gapi.Error{500, "Failed to connect to database"}
 	}
-	err = DB.Ping()
-	if err != nil {
-		log.Printf("Failed to connect to database: %v", err)
-		return gapi.Error{500, "Failed to connect to database"}
-	}
-	return nil
+	return Ping()
 }

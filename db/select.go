@@ -105,6 +105,10 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 // over the replies, storing them in new base elements. At the very end,
 // the *d is overwritten with the new slice.
 func SelectMany(needle interface{}, haystack string, table string, d interface{}) error {
+	if DB == nil {
+		log.Errorf("Tried to issue SelectMany() without a DB object")
+		return gondulapi.Errorf(500, "Internal server error")
+	}
 	dval := reflect.ValueOf(d)
 	// This is needed because we need to be able to update with a
 	// potentially new slice.
@@ -124,8 +128,17 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 		log.Errorf("SelectMany() must be called with pointer-to-slice, e.g: &[]foo, got: %T inner is: %v / %#v / %s / kind: %s", d, dval, dval, dval, dval.Kind())
 		return gondulapi.Errorf(500, "Internal server error")
 	}
+
+	// st stores the type we need to return an array, while fieldList
+	// stores the actual base element. Usually, they are the same,
+	// unless you pass []*foo, in which case st will represent *foo and
+	// fieldList will represent foo.
 	st := dval.Type()
 	st = st.Elem()
+	fieldList := st
+	if fieldList.Kind() == reflect.Ptr {
+		fieldList = fieldList.Elem()
+	}
 
 	// We make a new slice - this is what we will actually return/set
 	retv := reflect.MakeSlice(reflect.SliceOf(st), 0, 0)
@@ -137,8 +150,8 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 	comma := ""
 
 	// Iterate over the struct - store the keys, and populate vals.
-	for i := 0; i < st.NumField(); i++ {
-		field := st.Field(i)
+	for i := 0; i < fieldList.NumField(); i++ {
+		field := fieldList.Field(i)
 		if !unicode.IsUpper(rune(field.Name[0])) {
 			continue
 		}
@@ -178,14 +191,23 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 		newidx := reflect.New(st)
 		newidx = reflect.Indirect(newidx)
 
+		// If it's an array of pointers, we need to fiddle a bit.
+		// This is probably not prefect.
+		newval := newidx
+		if newidx.Kind() == reflect.Ptr {
+			newval = reflect.New(st.Elem()) // returns a _pointer_ to the new value, which is why this works.
+			newidx.Set(newval)
+			newval = reflect.Indirect(newval)
+		}
+
 		// For each struct tag, populate it.
-		for i := 0; i < st.NumField(); i++ {
-			field := st.Field(i)
+		for i := 0; i < fieldList.NumField(); i++ {
+			field := fieldList.Field(i)
 			if !unicode.IsUpper(rune(field.Name[0])) {
 				continue
 			}
 			newv := reflect.Indirect(reflect.ValueOf(vals[i]))
-			value := newidx.Field(i)
+			value := newval.Field(i)
 			value.Set(newv)
 		}
 		retv = reflect.Append(retv, newidx)
