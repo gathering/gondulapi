@@ -32,7 +32,7 @@ import (
 // Switch represents a single switch, or box. It can be updated in bulk or
 // singular.
 type Switch struct {
-	Sysname       string
+	Sysname       *string
 	MgmtIP4       *types.IP  `column:"mgmt_v4_addr"`
 	MgmtIP6       *types.IP  `column:"mgmt_v6_addr"`
 	LastUpdated   *time.Time `column:"last_updated"`
@@ -64,21 +64,33 @@ func (s *Switch) Get(element string) error {
 	return db.Get(element, "sysname", "switches", s)
 }
 
+func strmatcher(element *string, s **string) error {
+	if (element == nil || *element == "")  && (*s == nil || **s == "") {
+		return gondulapi.Errorf(400, "The id can't be blank for a oplog entry.")
+	}
+	if *element == "" {
+		*element = **s
+		return nil
+	}
+	if *s == nil {
+		var news string
+		*s = &news
+		**s = *element
+		return nil
+	}
+	return nil
+}
+
 // Put will update or add a provided switch. If the name on the url and the
 // one contained in the data doesn't match, the switch will be renamed from
 // what's on the url to what's in the data.
 func (s Switch) Put(element string) (gondulapi.Report, error) {
-	if element == "" {
-		element = s.Sysname
+	err := strmatcher(&element, &s.Sysname)
+	if err != nil {
+		return gondulapi.Report{Failed: 1}, err
 	}
-	if s.Sysname == "" {
-		s.Sysname = element
-	}
-	if element == "" {
-		return gondulapi.Report{Failed: 1}, gondulapi.Errorf(400, "The systemname can't be blank for a switch.")
-	}
-	if s.Sysname != element {
-		log.Printf("Renaming switch from %s to %s", element, s.Sysname)
+	if *s.Sysname != element {
+		log.Printf("Renaming switch from %s to %s", element, *s.Sysname)
 	}
 	return db.Upsert(element, "sysname", "switches", s)
 }

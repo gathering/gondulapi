@@ -45,7 +45,6 @@ type input struct {
 type output struct {
 	code         int
 	data         interface{}
-	failed       bool
 	cachecontrol string
 }
 
@@ -123,32 +122,31 @@ func message(str string, v ...interface{}) (m struct {
 // interface and calls the relevant function, if any, for that data. For
 // PUT and POST it also parses the input data.
 func handle(item interface{}, input input, path string) (output output) {
-	output.failed = true
 	output.code = 200
+	var report gondulapi.Report
 	var err error
 	defer func() {
-		if output.failed != true {
-			if output.data == nil {
-				output.data = message("%s on %s successful", input.method, path)
-			}
-			return
-		}
-		code := 400
+		log.WithFields(log.Fields{
+				"output.code":  output.code,
+				"output.data":  output.data,
+				"error":    err,
+		}).Trace("Request handled")
 		gerr, havegerr := err.(gondulapi.Error)
-		if havegerr {
-			code = gerr.Code
+		if err != nil && report.Error == nil {
+			report.Error = err
 		}
-		output.code = code
-		if output.data == nil {
-			if code == 200 && havegerr {
-				output.data = gerr.Message
-				return
-			}
-			m := message("%s on %s failed", input.method, path)
-			if err != nil {
-				m.Error = fmt.Sprintf("%v", err)
-			}
-			output.data = m
+		if report.Code != 0 {
+			output.code = report.Code
+		} else if havegerr {
+			log.Tracef("During REST defered reply, we got a gondulapi.Error: %v", gerr)
+			output.code = gerr.Code
+		} else if report.Error != nil {
+			output.code = 500
+		} else {
+			output.code = 200
+		}
+		if output.data == nil && output.code != 204 {
+			output.data = report
 		}
 	}()
 	if input.method == "GET" {
@@ -158,10 +156,10 @@ func handle(item interface{}, input input, path string) (output output) {
 			return
 		}
 		err = get.Get(input.url.Path[len(path):])
-		if err == nil {
-			output.data = get
-			output.failed = false
+		if err != nil {
+			return
 		}
+		output.data = get
 	} else if input.method == "PUT" {
 		err = json.Unmarshal(input.data, &item)
 		if err != nil {
@@ -172,24 +170,16 @@ func handle(item interface{}, input input, path string) (output output) {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
 		}
-		report, err := put.Put(input.url.Path[len(path):])
-		if err != nil {
-			return
-		}
+		report, err = put.Put(input.url.Path[len(path):])
 		output.data = report
-		output.failed = false
 	} else if input.method == "DELETE" {
 		del, ok := item.(gondulapi.Deleter)
 		if !ok {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
 		}
-		report, err := del.Delete(input.url.Path[len(path):])
-		if err != nil {
-			return
-		}
+		report, err = del.Delete(input.url.Path[len(path):])
 		output.data = report
-		output.failed = false
 	} else if input.method == "POST" {
 		err = json.Unmarshal(input.data, &item)
 		if err != nil {
@@ -200,12 +190,8 @@ func handle(item interface{}, input input, path string) (output output) {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
 		}
-		report, err := post.Post()
-		if err != nil {
-			return
-		}
+		report, err = post.Post()
 		output.data = report
-		output.failed = false
 	}
 	return
 }
@@ -216,7 +202,10 @@ func handle(item interface{}, input input, path string) (output output) {
 // that data and replies. All input/output is valid JSON.
 func (rcvr receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	input, err := rcvr.get(w, r)
-	log.Debugf("got %s - err %v", input.data, err)
+	log.WithFields(log.Fields{
+		"data": string(input.data),
+		"err": err,
+	}).Trace("Got")
 	pretty := len(input.url.Query()["pretty"]) > 0
 	item := rcvr.alloc()
 	output := handle(item, input, rcvr.path)

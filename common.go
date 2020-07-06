@@ -55,6 +55,8 @@ type Report struct {
 	Affected int
 	Ok       int
 	Failed   int
+	Error	 error `json:",omitempty"`
+	Code	int `json:"-"`
 }
 
 // Getter implements Get method, which should fetch the object represented
@@ -102,7 +104,7 @@ func Errori(code int, i interface{}) Error {
 
 // Error is used to combine a text-based error with a HTTP error code.
 type Error struct {
-	Code    int
+	Code	int `json:"-"`
 	Message interface{}
 }
 
