@@ -61,11 +61,11 @@ func init() {
 // convenience that returns 404 if it doesn't exist and 400 if element is
 // blank.
 func (s *Switch) Get(element string) error {
-	return db.Get(s, "switches","sysname","=",element)
+	return db.Get(s, "switches", "sysname", "=", element)
 }
 
 func strmatcher(element *string, s **string) error {
-	if (element == nil || *element == "")  && (*s == nil || **s == "") {
+	if (element == nil || *element == "") && (*s == nil || **s == "") {
 		return gondulapi.Errorf(400, "The id can't be blank for a oplog entry.")
 	}
 	if *element == "" {

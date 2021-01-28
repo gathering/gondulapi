@@ -127,9 +127,9 @@ func handle(item interface{}, input input, path string) (output output) {
 	var err error
 	defer func() {
 		log.WithFields(log.Fields{
-				"output.code":  output.code,
-				"output.data":  output.data,
-				"error":    err,
+			"output.code": output.code,
+			"output.data": output.data,
+			"error":       err,
 		}).Trace("Request handled")
 		gerr, havegerr := err.(gondulapi.Error)
 		if err != nil && report.Error == nil {
@@ -204,7 +204,7 @@ func (rcvr receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	input, err := rcvr.get(w, r)
 	log.WithFields(log.Fields{
 		"data": string(input.data),
-		"err": err,
+		"err":  err,
 	}).Trace("Got")
 	pretty := len(input.url.Query()["pretty"]) > 0
 	item := rcvr.alloc()

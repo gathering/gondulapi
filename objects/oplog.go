@@ -20,8 +20,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 package objects
 
 import (
-	"time"
 	"fmt"
+	"time"
 
 	"github.com/gathering/gondulapi"
 	"github.com/gathering/gondulapi/db"
@@ -31,11 +31,11 @@ import (
 // Oplog is a single oplog entry. It can be created with POST, or updated
 // with PUT referencing the id.
 type Oplog struct {
-	Id	*int
-	Time	*time.Time
-	Systems	*string
+	Id       *int
+	Time     *time.Time
+	Systems  *string
 	Username *string
-	Log	*string
+	Log      *string
 }
 
 // Oplogs is an array of oplog entries, and can only be fetched (with Get).
@@ -51,7 +51,7 @@ func (o *Oplog) Get(element string) error {
 }
 
 func intmatcher(element *string, i **int) error {
-	if (element == nil || *element == "")  && *i == nil {
+	if (element == nil || *element == "") && *i == nil {
 		return gondulapi.Errorf(400, "The id can't be blank for a oplog entry.")
 	}
 	if *element == "" {
@@ -92,4 +92,3 @@ func (o Oplog) Delete(element string) (gondulapi.Report, error) {
 func (os *Oplogs) Get(element string) error {
 	return db.SelectMany(os, "oplog")
 }
-

@@ -62,7 +62,6 @@ type keyvals struct {
 	newvals []interface{}
 }
 
-
 func enumerate(haystacks map[string]bool, populate bool, d interface{}) (keyvals, error) {
 	v := reflect.ValueOf(d)
 	v = reflect.Indirect(v)
@@ -121,8 +120,8 @@ func Update(d interface{}, table string, searcher ...interface{}) (gondulapi.Rep
 		report.Failed++
 		return report, err
 	}
-	haystacks := make(map[string]bool,0)
-	for _, item := range(search) {
+	haystacks := make(map[string]bool, 0)
+	for _, item := range search {
 		haystacks[item.Haystack] = true
 	}
 	kvs, err := enumerate(haystacks, false, d)
@@ -141,7 +140,7 @@ func Update(d interface{}, table string, searcher ...interface{}) (gondulapi.Rep
 	}
 	strsearch, searcharr := buildWhere(last+1, search)
 	lead = fmt.Sprintf("%s WHERE %s", lead, strsearch)
-	for _,item := range(searcharr) {
+	for _, item := range searcharr {
 		kvs.values = append(kvs.values, item)
 	}
 	res, err := DB.Exec(lead, kvs.values...)
@@ -164,7 +163,7 @@ func Update(d interface{}, table string, searcher ...interface{}) (gondulapi.Rep
 // check if that is not the desired behavior.
 func Insert(d interface{}, table string) (gondulapi.Report, error) {
 	report := gondulapi.Report{}
-	haystacks := make(map[string]bool,0)
+	haystacks := make(map[string]bool, 0)
 	kvs, err := enumerate(haystacks, false, d)
 	if err != nil {
 		log.WithError(err).Error("Insert(): Enumerate failed")

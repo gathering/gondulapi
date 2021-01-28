@@ -86,19 +86,21 @@ func Select(d interface{}, table string, searcher ...interface{}) (found bool, e
 type Selector struct {
 	Haystack string
 	Operator string
-	Needle interface{}
+	Needle   interface{}
 }
-func	buildWhere (offset int, search []Selector) (string, []interface{}){
+
+func buildWhere(offset int, search []Selector) (string, []interface{}) {
 	strsearch := ""
-	searcharr := make([]interface{},0)
+	searcharr := make([]interface{}, 0)
 	tmpand := ""
-	for idx,item := range(search) {
+	for idx, item := range search {
 		strsearch = fmt.Sprintf("%s %s %s %s $%d", strsearch, tmpand, item.Haystack, item.Operator, offset+idx+1)
 		tmpand = " AND "
 		searcharr = append(searcharr, item.Needle)
 	}
 	return strsearch, searcharr
 }
+
 // SelectMany selects multiple rows from the table, populating the slice
 // pointed to by d. It must, as such, be called with a pointer to a slice as
 // the d-value (it checks).
@@ -167,7 +169,7 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) error {
 	keys, comma := "", ""
 	sample := reflect.New(fieldList)
 	sampleUnderscoreRaw := sample.Interface()
-	haystacks := make(map[string]bool,0)
+	haystacks := make(map[string]bool, 0)
 	kvs, err := enumerate(haystacks, true, &sampleUnderscoreRaw)
 	if err != nil {
 		log.WithError(err).Errorf("enumerate() failed during query. This is bad.")
@@ -285,11 +287,11 @@ func buildSearch(searcher ...interface{}) ([]Selector, error) {
 	if len(searcher) == 0 {
 		search = []Selector{}
 	} else if len(searcher)%3 != 0 {
-		return nil,gondulapi.Errorf(500, "Uneven search function call")
+		return nil, gondulapi.Errorf(500, "Uneven search function call")
 	} else {
-		search = make([]Selector,0)
+		search = make([]Selector, 0)
 		for i := 0; i < len(searcher); i += 3 {
-			search = append(search,Selector{searcher[i].(string), searcher[i+1].(string), searcher[i+2]})
+			search = append(search, Selector{searcher[i].(string), searcher[i+1].(string), searcher[i+2]})
 		}
 	}
 	return search, nil
