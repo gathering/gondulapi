@@ -47,7 +47,7 @@ func init() {
 }
 
 func (o *Oplog) Get(element string) error {
-	return db.Get(element, "id", "oplog", o)
+	return db.Get(o, "oplog", "id", "=", element)
 }
 
 func intmatcher(element *string, i **int) error {
@@ -75,11 +75,11 @@ func (o Oplog) Put(element string) (gondulapi.Report, error) {
 	if err != nil {
 		return gondulapi.Report{Failed: 1}, err
 	}
-	return db.Upsert(element, "id", "oplog", o)
+	return db.Upsert(o, "oplog", "id", "=", element)
 }
 
 func (o Oplog) Post() (gondulapi.Report, error) {
-	return db.Insert("oplog",o)
+	return db.Insert(o, "oplog")
 }
 
 // Delete the switch
@@ -90,6 +90,6 @@ func (o Oplog) Delete(element string) (gondulapi.Report, error) {
 // Get multiple switches. Relies on s being a pointer to an array of
 // structs (which it is).
 func (os *Oplogs) Get(element string) error {
-	return db.SelectMany(1, "1", "oplog", os)
+	return db.SelectMany(os, "oplog")
 }
 

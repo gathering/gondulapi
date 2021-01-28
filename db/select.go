@@ -51,7 +51,7 @@ import (
 // iterates over the fields of d, preparing both the query and allocating
 // zero-values of the relevant objects. After this, the query is executed
 // and the values are stored on the temporary values. The last pass stores
-func Select(needle interface{}, haystack string, table string, d interface{}) (found bool, err error) {
+func Select(d interface{}, table string, searcher ...interface{}) (found bool, err error) {
 	st := reflect.ValueOf(d)
 	if st.Kind() != reflect.Ptr {
 		log.Error("Select() called with non-pointer interface. This wouldn't really work.")
@@ -64,7 +64,7 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 	retvi := retv.Interface()
 
 	// Do the actual work :D
-	err = SelectMany(needle, haystack, table, &retvi)
+	err = SelectMany(&retvi, table, searcher...)
 
 	if err != nil {
 		log.WithError(err).Error("Call to SelectMany() from Select() failed.")
@@ -83,6 +83,22 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 	return true, nil
 }
 
+type Selector struct {
+	Haystack string
+	Operator string
+	Needle interface{}
+}
+func	buildWhere (offset int, search []Selector) (string, []interface{}){
+	strsearch := ""
+	searcharr := make([]interface{},0)
+	tmpand := ""
+	for idx,item := range(search) {
+		strsearch = fmt.Sprintf("%s %s %s %s $%d", strsearch, tmpand, item.Haystack, item.Operator, offset+idx+1)
+		tmpand = " AND "
+		searcharr = append(searcharr, item.Needle)
+	}
+	return strsearch, searcharr
+}
 // SelectMany selects multiple rows from the table, populating the slice
 // pointed to by d. It must, as such, be called with a pointer to a slice as
 // the d-value (it checks).
@@ -105,7 +121,7 @@ func Select(needle interface{}, haystack string, table string, d interface{}) (f
 // the result. Once this loop is done, it executes the query, then iterates
 // over the replies, storing them in new base elements. At the very end,
 // the *d is overwritten with the new slice.
-func SelectMany(needle interface{}, haystack string, table string, d interface{}) error {
+func SelectMany(d interface{}, table string, searcher ...interface{}) error {
 	if DB == nil {
 		log.Errorf("Tried to issue SelectMany() without a DB object")
 		return gondulapi.InternalError
@@ -130,6 +146,10 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 		return gondulapi.InternalError
 	}
 
+	search, err := buildSearch(searcher...)
+	if err != nil {
+		return err
+	}
 	// st stores the type we need to return an array, while fieldList
 	// stores the actual base element. Usually, they are the same,
 	// unless you pass []*foo, in which case st will represent *foo and
@@ -147,7 +167,8 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 	keys, comma := "", ""
 	sample := reflect.New(fieldList)
 	sampleUnderscoreRaw := sample.Interface()
-	kvs, err := enumerate("-", true, &sampleUnderscoreRaw)
+	haystacks := make(map[string]bool,0)
+	kvs, err := enumerate(haystacks, true, &sampleUnderscoreRaw)
 	if err != nil {
 		log.WithError(err).Errorf("enumerate() failed during query. This is bad.")
 		return gondulapi.InternalError
@@ -156,9 +177,10 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 		keys = fmt.Sprintf("%s%s%s", keys, comma, kvs.keys[idx])
 		comma = ","
 	}
-	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1", keys, table, haystack)
+	strsearch, searcharr := buildWhere(0, search)
+	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s", keys, table, strsearch)
 	log.WithField("query", q).Tracef("Select()")
-	rows, err := DB.Query(q, needle)
+	rows, err := DB.Query(q, searcharr...)
 	if err != nil {
 		log.WithError(err).WithField("query", q).Info("Select(): SELECT failed on DB.Query")
 		return gondulapi.InternalError
@@ -211,9 +233,15 @@ func SelectMany(needle interface{}, haystack string, table string, d interface{}
 // given table. It returns found=true if it does. It returns found=false if
 // it doesn't find it - including if an error occurs (which will also be
 // returned).
-func Exists(needle interface{}, haystack string, table string) (found bool, err error) {
-	q := fmt.Sprintf("SELECT * FROM %s WHERE %s = $1 LIMIT 1", table, haystack)
-	rows, err := DB.Query(q, needle)
+func Exists(table string, searcher ...interface{}) (found bool, err error) {
+	search, err := buildSearch(searcher...)
+	if err != nil {
+		log.WithError(err).Error("Exists(): failed, unable to build search")
+		return false, gondulapi.InternalError
+	}
+	searchstr, searcharr := buildWhere(0, search)
+	q := fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT 1", table, searchstr)
+	rows, err := DB.Query(q, searcharr...)
 	if err != nil {
 		log.WithError(err).WithField("query", q).Info("Exists(): SELECT failed")
 		return false, gondulapi.InternalError
@@ -237,17 +265,42 @@ func Exists(needle interface{}, haystack string, table string) (found bool, err 
 //
 // It is provided so callers can implement receiver.Getter by simply
 // calling this to get reasonable default-behavior.
-func Get(needle interface{}, haystack string, table string, item interface{}) error {
+/*func Get(needle interface{}, haystack string, table string, item interface{}) error {
 	value := reflect.ValueOf(needle)
 	if value.IsZero() {
 		return gondulapi.Errorf(400, "No item to look for provided")
 	}
-	found, err := Select(needle, haystack, table, item)
+	found, err := Select([]Selector{{haystack,"=",needle}}, table, item)
 	if err != nil {
 		return gondulapi.InternalError
 	}
 	if !found {
 		return gondulapi.Errorf(404, "Couldn't find item %v", needle)
+	}
+	return nil
+}*/
+
+func buildSearch(searcher ...interface{}) ([]Selector, error) {
+	var search []Selector
+	if len(searcher) == 0 {
+		search = []Selector{}
+	} else if len(searcher)%3 != 0 {
+		return nil,gondulapi.Errorf(500, "Uneven search function call")
+	} else {
+		search = make([]Selector,0)
+		for i := 0; i < len(searcher); i += 3 {
+			search = append(search,Selector{searcher[i].(string), searcher[i+1].(string), searcher[i+2]})
+		}
+	}
+	return search, nil
+}
+func Get(item interface{}, table string, searcher ...interface{}) error {
+	found, err := Select(item, table, searcher...)
+	if err != nil {
+		return gondulapi.InternalError
+	}
+	if !found {
+		return gondulapi.Errorf(404, "Couldn't find item ")
 	}
 	return nil
 }

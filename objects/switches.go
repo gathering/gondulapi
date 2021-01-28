@@ -61,7 +61,7 @@ func init() {
 // convenience that returns 404 if it doesn't exist and 400 if element is
 // blank.
 func (s *Switch) Get(element string) error {
-	return db.Get(element, "sysname", "switches", s)
+	return db.Get(s, "switches","sysname","=",element)
 }
 
 func strmatcher(element *string, s **string) error {
@@ -109,7 +109,7 @@ func (s Switch) Delete(element string) (gondulapi.Report, error) {
 // Get multiple switches. Relies on s being a pointer to an array of
 // structs (which it is).
 func (s *Switches) Get(element string) error {
-	return db.SelectMany(1, "1", "switches", s)
+	return db.SelectMany(s, "switches")
 }
 
 // Post all the provided switches in bulk.

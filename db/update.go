@@ -62,7 +62,8 @@ type keyvals struct {
 	newvals []interface{}
 }
 
-func enumerate(haystack string, populate bool, d interface{}) (keyvals, error) {
+
+func enumerate(haystacks map[string]bool, populate bool, d interface{}) (keyvals, error) {
 	v := reflect.ValueOf(d)
 	v = reflect.Indirect(v)
 	if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
@@ -90,7 +91,7 @@ func enumerate(haystack string, populate bool, d interface{}) (keyvals, error) {
 		if ncol, ok := field.Tag.Lookup("column"); ok {
 			col = ncol
 		}
-		if col == haystack || col == "-" {
+		if haystacks[col] || col == "-" {
 			continue
 		}
 
@@ -113,9 +114,18 @@ func enumerate(haystack string, populate bool, d interface{}) (keyvals, error) {
 // Update attempts to update the object in the database, using the provided
 // string and matching the haystack with the needle. It skips fields that
 // are nil-pointers.
-func Update(needle interface{}, haystack string, table string, d interface{}) (gondulapi.Report, error) {
-	kvs, err := enumerate(haystack, false, d)
+func Update(d interface{}, table string, searcher ...interface{}) (gondulapi.Report, error) {
 	report := gondulapi.Report{}
+	search, err := buildSearch(searcher...)
+	if err != nil {
+		report.Failed++
+		return report, err
+	}
+	haystacks := make(map[string]bool,0)
+	for _, item := range(search) {
+		haystacks[item.Haystack] = true
+	}
+	kvs, err := enumerate(haystacks, false, d)
 	if err != nil {
 		log.WithError(err).Error("Update(): enumerate() failed")
 		report.Failed++
@@ -129,8 +139,11 @@ func Update(needle interface{}, haystack string, table string, d interface{}) (g
 		comma = ", "
 		last = idx
 	}
-	lead = fmt.Sprintf("%s WHERE %s = $%d", lead, haystack, last+2)
-	kvs.values = append(kvs.values, needle)
+	strsearch, searcharr := buildWhere(last+1, search)
+	lead = fmt.Sprintf("%s WHERE %s", lead, strsearch)
+	for _,item := range(searcharr) {
+		kvs.values = append(kvs.values, item)
+	}
 	res, err := DB.Exec(lead, kvs.values...)
 	if err != nil {
 		log.WithError(err).WithField("lead", lead).Error("Update(): EXEC failed")
@@ -149,9 +162,10 @@ func Update(needle interface{}, haystack string, table string, d interface{}) (g
 // if an object already exists, so it will happily make duplicates -
 // your database schema should prevent that, and calling code should
 // check if that is not the desired behavior.
-func Insert(table string, d interface{}) (gondulapi.Report, error) {
+func Insert(d interface{}, table string) (gondulapi.Report, error) {
 	report := gondulapi.Report{}
-	kvs, err := enumerate("-", false, d)
+	haystacks := make(map[string]bool,0)
+	kvs, err := enumerate(haystacks, false, d)
 	if err != nil {
 		log.WithError(err).Error("Insert(): Enumerate failed")
 		report.Failed++
@@ -190,22 +204,28 @@ func Insert(table string, d interface{}) (gondulapi.Report, error) {
 // still attempt an UPDATE, which will fail silently (for now). This can be
 // handled by a front-end doing a double-check, or by just assuming it
 // doesn't happen often enough to be worth fixing.
-func Upsert(needle interface{}, haystack string, table string, d interface{}) (gondulapi.Report, error) {
-	found, err := Exists(needle, haystack, table)
+func Upsert(d interface{}, table string, searcher ...interface{}) (gondulapi.Report, error) {
+	found, err := Exists(table, searcher...)
 	if err != nil {
 		return gondulapi.Report{Failed: 1}, gondulapi.InternalError
 	}
 	if found {
-		return Update(needle, haystack, table, d)
+		return Update(d, table, searcher...)
 	}
-	return Insert(table, d)
+	return Insert(d, table)
 }
 
 // Delete will delete the element, and will also delete duplicates.
-func Delete(needle interface{}, haystack string, table string) (gondulapi.Report, error) {
+func Delete(table string, searcher ...interface{}) (gondulapi.Report, error) {
 	report := gondulapi.Report{}
-	q := fmt.Sprintf("DELETE FROM %s WHERE %s = $1", table, haystack)
-	res, err := DB.Exec(q, needle)
+	search, err := buildSearch(searcher...)
+	if err != nil {
+		report.Failed++
+		return report, err
+	}
+	strsearch, searcharr := buildWhere(0, search)
+	q := fmt.Sprintf("DELETE FROM %s WHERE %s", table, strsearch)
+	res, err := DB.Exec(q, searcharr...)
 	if err != nil {
 		report.Failed++
 		log.WithError(err).WithField("query", q).Error("Delete(): Query failed")
