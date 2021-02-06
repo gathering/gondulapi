@@ -29,6 +29,7 @@ package objects
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gathering/gondulapi"
@@ -39,7 +40,7 @@ import (
 // Test is a single test(result), with all relevant descriptions. It is
 // used mainly for writes, but can be Get() from as well - because why not.
 type Test struct {
-	Track       *int
+	Track       *string
 	Station     *int
 	Hash        *string       // Hash is a unique identifier for a single test, defined by the poster. Typically a sha-sum of the title. The key for a single test is, thus, track/station/hash
 	Title       *string       // Short title
@@ -56,18 +57,62 @@ type Test struct {
 // station.
 type StationTests []Test
 
+type Docstub struct {
+	Family    *string
+	Shortname *string
+	Name      *string
+	Sequence  *int
+	Content   *string
+}
+
+type Docs []Docstub
+
 func init() {
 	receiver.AddHandler("/test/", func() interface{} { return &Test{} })
 	receiver.AddHandler("/tests/track/", func() interface{} { return &StationTests{} })
+	receiver.AddHandler("/doc/family/", func() interface{} { return &Docstub{} })
+	receiver.AddHandler("/doc/", func() interface{} { return &Docs{} })
+}
+
+func (ds *Docstub) Get(element string) error {
+	family, shortname := "", ""
+	element = strings.Replace(element, "/", " ", -1)
+	_, err := fmt.Sscanf(element, "%s shortname %s", &family, &shortname)
+	if err != nil {
+		return gondulapi.Errorf(400, "Invalid search string, need family/%%s/shortname/%%s, got family/%s, err: %v", element, err)
+	}
+	return db.Get(ds, "docs", "family", "=", family, "shortname", "=", shortname)
+}
+
+func (ds Docstub) Put(element string) (gondulapi.Report, error) {
+	family, shortname := "", ""
+	element = strings.Replace(element, "/", " ", -1)
+	_, err := fmt.Sscanf(element, "%s shortname %s", &family, &shortname)
+	if err != nil {
+		return gondulapi.Report{Failed: 1}, gondulapi.Errorf(400, "Invalid search string, need family/%%s/shortname/%%s, got family/%s, err: %v", element, err)
+	}
+	return db.Upsert(ds, "docs", "family", "=", family, "shortname", "=", shortname)
+}
+
+func (ds Docstub) Post() (gondulapi.Report, error) {
+	if ds.Family == nil || *ds.Family == "" || ds.Shortname == nil || *ds.Shortname == "" {
+		return gondulapi.Report{Failed: 1}, gondulapi.Errorf(400, "Need to provide Family and Shortname for doc stubs")
+	}
+	return db.Upsert(ds, "docs", "family", "=", ds.Family, "shortname", "=", ds.Shortname)
+}
+
+func (d *Docs) Get(element string) error {
+	return db.SelectMany(d, "docs", "family", "=", element)
 }
 
 // Get an array of tests associated with a station, uses the
 // url path /test/track/$TRACKID/station/$STATIONID for readability.
 func (st *StationTests) Get(element string) error {
-	track, station := 0, 0
-	_, err := fmt.Sscanf(element, "%d/station/%d", &track, &station)
+	track, station := "", 0
+	element = strings.Replace(element, "/", " ", -1)
+	_, err := fmt.Sscanf(element, "%s station %d", &track, &station)
 	if err != nil {
-		return gondulapi.Errorf(400, "Invalid search string, need track/%%d/station/%%d, got station/%s, err: %v", element, err)
+		return gondulapi.Errorf(400, "Invalid search string, need track/%%s/station/%%d, got station/%s, err: %v", element, err)
 	}
 	return db.SelectMany(st, "results", "track", "=", track, "station", "=", station)
 }
@@ -76,12 +121,13 @@ func (st *StationTests) Get(element string) error {
 // it into t, building t.id while we're at it which can be parsed to any
 // gondulapi.db function that accepts variadic search arguments.
 func (t *Test) mkid(element string) error {
-	t.Track = new(int)
+	t.Track = new(string)
 	t.Station = new(int)
 	t.Hash = new(string)
-	_, err := fmt.Sscanf(element, "track/%d/station/%d/hash/%s", t.Track, t.Station, t.Hash)
+	element = strings.Replace(element, "/", " ", -1)
+	_, err := fmt.Sscanf(element, "track %s station %d hash %s", t.Track, t.Station, t.Hash)
 	if err != nil {
-		return gondulapi.Errorf(400, "Invalid search string, need track/%%d/station/%%d/hash/%%s, got %s, err: %v", element, err)
+		return gondulapi.Errorf(400, "Invalid search string, need track/%%s/station/%%d/hash/%%s, got %s, err: %v", element, err)
 	}
 	t.id = []interface{}{"track", "=", t.Track, "station", "=", t.Station, "hash", "=", t.Hash}
 	return nil
@@ -107,7 +153,7 @@ func (t Test) Put(element string) (gondulapi.Report, error) {
 // Post a single test - Also uses upsert, but ignores the URL and requires
 // all fields to be present in the data instead.
 func (t Test) Post() (gondulapi.Report, error) {
-	if t.Track == nil || *t.Track == 0 || t.Station == nil || *t.Station == 0 || t.Hash == nil || *t.Hash == "" {
+	if t.Track == nil || *t.Track == "" || t.Station == nil || *t.Station == 0 || t.Hash == nil || *t.Hash == "" {
 		return gondulapi.Report{Failed: 1}, gondulapi.Errorf(400, "POST must define both track and station as non-0 values")
 	}
 	return db.Upsert(t, "results", "track", "=", t.Track, "station", "=", t.Station, "hash", "=", t.Hash)
