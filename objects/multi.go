@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/gathering/gondulapi"
+	"github.com/gathering/gondulapi/auth"
 	"github.com/gathering/gondulapi/db"
 	"github.com/gathering/gondulapi/receiver"
 )
@@ -40,15 +41,16 @@ import (
 // Test is a single test(result), with all relevant descriptions. It is
 // used mainly for writes, but can be Get() from as well - because why not.
 type Test struct {
-	Track       *string
-	Station     *int
-	Hash        *string       // Hash is a unique identifier for a single test, defined by the poster. Typically a sha-sum of the title. The key for a single test is, thus, track/station/hash
-	Title       *string       // Short title
-	Time        *time.Time    // Update time. Can be left empty on PUT/POST (updated by triggers)
-	Description *string       // Longer description for the test
-	Status      *string       // Actual status-result. Should probably be OK / WARN/ FAIL or something (to be defined)
-	Participant *string       // Participant ID... somewhat legacy. Might be removed.
-	id          []interface{} // see mkid
+	Track            *string
+	Station          *int
+	Hash             *string       // Hash is a unique identifier for a single test, defined by the poster. Typically a sha-sum of the title. The key for a single test is, thus, track/station/hash
+	Title            *string       // Short title
+	Time             *time.Time    // Update time. Can be left empty on PUT/POST (updated by triggers)
+	Description      *string       // Longer description for the test
+	Status           *string       // Actual status-result. Should probably be OK / WARN/ FAIL or something (to be defined)
+	Participant      *string       // Participant ID... somewhat legacy. Might be removed.
+	*auth.ReadPublic               // Authentication enforced for writes, not reads.
+	id               []interface{} // see mkid
 }
 
 // StationTests is an array of tests associated with a single station (and
@@ -63,6 +65,7 @@ type Docstub struct {
 	Name      *string
 	Sequence  *int
 	Content   *string
+	*auth.ReadPublic
 }
 
 type Docs []Docstub

@@ -59,6 +59,16 @@ type Report struct {
 	Code     int   `json:"-"`
 }
 
+// Auther allows objects to enforce (basic) authentication optionally. For
+// every request, a basepath (the path the object is registered to), an
+// element (the item being worked on, if any) a method (GET/PUT/POST, etc)
+// and username and password is provided.
+//
+// See gondulapi/auth for some convenience-implementations.
+type Auther interface {
+	Auth(basepath string, element string, method string, user string, password string) error
+}
+
 // Getter implements Get method, which should fetch the object represented
 // by the element path.
 type Getter interface {

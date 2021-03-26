@@ -32,6 +32,8 @@ var Config struct {
 	ListenAddress    string // Defaults to :8080
 	ConnectionString string // For database connections
 	Prefix           string // URL prefix, e.g. "/api".
+	HTTPUser         string // username for HTTP basic auth
+	HTTPPw           string // password for HTTP basic auth
 	Debug            bool   // Enables trace-debugging
 }
 

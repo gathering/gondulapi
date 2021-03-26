@@ -21,12 +21,14 @@ package receiver
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/gathering/gondulapi"
 
@@ -196,6 +198,33 @@ func handle(item interface{}, input input, path string) (output output) {
 	return
 }
 
+// checkAuth verifies authentication
+func checkAuth(item interface{}, r *http.Request, rcvr receiver) (output, error) {
+	auth, ok := item.(gondulapi.Auther)
+	if !ok {
+		return output{}, nil
+	}
+	var user, pass string
+	if r.Header["Authorization"] == nil || len(r.Header["Authorization"]) < 1 {
+		user = ""
+		pass = ""
+	} else {
+		hdr := r.Header["Authorization"][0]
+		raw := strings.Split(hdr, "Basic ")
+		clean, err := base64.StdEncoding.DecodeString(raw[1])
+		log.Printf("Got auth: %v err: %v", clean, err)
+		up := strings.Split(string(clean), ":")
+		user = up[0]
+		pass = up[1]
+	}
+
+	err := auth.Auth(rcvr.path, r.URL.Path[len(rcvr.path):], r.Method, user, pass)
+	if err != nil {
+		return output{401, "damn", "no-cache"}, err
+	}
+	return output{}, nil
+}
+
 // ServeHTTP implements the net/http ServeHTTP handler. It does this by
 // first reading input data, then allocating a data structure specified on
 // the receiver originally through AddHandler, then parses input data onto
@@ -208,6 +237,10 @@ func (rcvr receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}).Trace("Got")
 	pretty := len(input.url.Query()["pretty"]) > 0
 	item := rcvr.alloc()
+	if output, err := checkAuth(item, r, rcvr); err != nil {
+		rcvr.answer(w, output, pretty)
+		return
+	}
 	output := handle(item, input, rcvr.path)
 	rcvr.answer(w, output, pretty)
 }
