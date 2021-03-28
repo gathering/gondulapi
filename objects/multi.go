@@ -49,7 +49,8 @@ type Test struct {
 	Description      *string       // Longer description for the test
 	Status           *string       // Actual status-result. Should probably be OK / WARN/ FAIL or something (to be defined)
 	Participant      *string       // Participant ID... somewhat legacy. Might be removed.
-	*auth.ReadPublic               // Authentication enforced for writes, not reads.
+	Seq		 *int	       // Sorting ID
+	*auth.ReadPublic `column:"-"`              // Authentication enforced for writes, not reads.
 	id               []interface{} // see mkid
 }
 
@@ -65,7 +66,7 @@ type Docstub struct {
 	Name      *string
 	Sequence  *int
 	Content   *string
-	*auth.ReadPublic
+	*auth.ReadPublic `column:"-"`
 }
 
 type Docs []Docstub
