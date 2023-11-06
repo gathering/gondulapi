@@ -52,11 +52,12 @@ import "fmt"
 // Report is an update report on write-requests. The precise meaning might
 // vary, but the gist should be the same.
 type Report struct {
-	Affected int
-	Ok       int
-	Failed   int
+	Affected int  `json:",omitempty"`
+	Ok       int  `json:",omitempty"`
+	Failed   int  `json:",omitempty"`
 	Error    error `json:",omitempty"`
 	Code     int   `json:"-"`
+	Headers	 map[string]string `json:"-"`
 }
 
 // Auther allows objects to enforce (basic) authentication optionally. For
@@ -72,7 +73,7 @@ type Auther interface {
 // Getter implements Get method, which should fetch the object represented
 // by the element path.
 type Getter interface {
-	Get(element string) error
+	Get(element string) (Report, error)
 }
 
 // Putter is an idempotent method that requires an absolute path. It should

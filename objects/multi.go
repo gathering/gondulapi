@@ -36,6 +36,7 @@ import (
 	"github.com/gathering/gondulapi/auth"
 	"github.com/gathering/gondulapi/db"
 	"github.com/gathering/gondulapi/receiver"
+	log "github.com/sirupsen/logrus"
 )
 
 // Test is a single test(result), with all relevant descriptions. It is
@@ -78,12 +79,13 @@ func init() {
 	receiver.AddHandler("/doc/", func() interface{} { return &Docs{} })
 }
 
-func (ds *Docstub) Get(element string) error {
+func (ds *Docstub) Get(element string) (gondulapi.Report, error) {
 	family, shortname := "", ""
 	element = strings.Replace(element, "/", " ", -1)
 	_, err := fmt.Sscanf(element, "%s shortname %s", &family, &shortname)
 	if err != nil {
-		return gondulapi.Errorf(400, "Invalid search string, need family/%%s/shortname/%%s, got family/%s, err: %v", element, err)
+
+		return gondulapi.Report{Failed:1}, gondulapi.Errorf(400, "Invalid search string, need family/%%s/shortname/%%s, got family/%s, err: %v", element, err)
 	}
 	return db.Get(ds, "docs", "family", "=", family, "shortname", "=", shortname)
 }
@@ -105,18 +107,18 @@ func (ds Docstub) Post() (gondulapi.Report, error) {
 	return db.Upsert(ds, "docs", "family", "=", ds.Family, "shortname", "=", ds.Shortname)
 }
 
-func (d *Docs) Get(element string) error {
+func (d *Docs) Get(element string) (gondulapi.Report, error) {
 	return db.SelectMany(d, "docs", "family", "=", element)
 }
 
 // Get an array of tests associated with a station, uses the
 // url path /test/track/$TRACKID/station/$STATIONID for readability.
-func (st *StationTests) Get(element string) error {
+func (st *StationTests) Get(element string) (gondulapi.Report, error) {
 	track, station := "", 0
 	element = strings.Replace(element, "/", " ", -1)
 	_, err := fmt.Sscanf(element, "%s station %d", &track, &station)
 	if err != nil {
-		return gondulapi.Errorf(400, "Invalid search string, need track/%%s/station/%%d, got station/%s, err: %v", element, err)
+		return gondulapi.Report{}, gondulapi.Errorf(400, "Invalid search string, need track/%%s/station/%%d, got station/%s, err: %v", element, err)
 	}
 	return db.SelectMany(st, "results", "track", "=", track, "station", "=", station)
 }
@@ -138,9 +140,11 @@ func (t *Test) mkid(element string) error {
 }
 
 // Get a single test
-func (t *Test) Get(element string) error {
+func (t *Test) Get(element string) (gondulapi.Report, error) {
 	if err := t.mkid(element); err != nil {
-		return err
+		log.Printf("mkid failed: %v",err)
+
+		return gondulapi.Report{Failed:1},err
 	}
 	return db.Get(t, "results", t.id...)
 }

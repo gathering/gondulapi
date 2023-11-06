@@ -51,11 +51,12 @@ import (
 // iterates over the fields of d, preparing both the query and allocating
 // zero-values of the relevant objects. After this, the query is executed
 // and the values are stored on the temporary values. The last pass stores
-func Select(d interface{}, table string, searcher ...interface{}) (found bool, err error) {
+func Select(d interface{}, table string, searcher ...interface{}) (report gondulapi.Report, err error) {
+	err = gondulapi.InternalError
 	st := reflect.ValueOf(d)
 	if st.Kind() != reflect.Ptr {
 		log.Error("Select() called with non-pointer interface. This wouldn't really work.")
-		return false, gondulapi.InternalError
+		return
 	}
 	st = reflect.Indirect(st)
 
@@ -64,23 +65,23 @@ func Select(d interface{}, table string, searcher ...interface{}) (found bool, e
 	retvi := retv.Interface()
 
 	// Do the actual work :D
-	err = SelectMany(&retvi, table, searcher...)
+	report, err = SelectMany(&retvi, table, searcher...)
 
 	if err != nil {
 		log.WithError(err).Error("Call to SelectMany() from Select() failed.")
-		return false, gondulapi.InternalError
+		return
 	}
 	// retvi will be overwritten with the response (because that's how
 	// append works), so retv now points to the empty original - update
 	// it.
 	retv = reflect.ValueOf(retvi)
 	if retv.Len() == 0 {
-		return false, nil
+		return
 	}
 	reply := retv.Index(0)
 	setthis := reflect.Indirect(reflect.ValueOf(d))
 	setthis.Set(reply)
-	return true, nil
+	return
 }
 
 type Selector struct {
@@ -123,17 +124,21 @@ func buildWhere(offset int, search []Selector) (string, []interface{}) {
 // the result. Once this loop is done, it executes the query, then iterates
 // over the replies, storing them in new base elements. At the very end,
 // the *d is overwritten with the new slice.
-func SelectMany(d interface{}, table string, searcher ...interface{}) error {
+func SelectMany(d interface{}, table string, searcher ...interface{}) (report gondulapi.Report, reterr error) {
+	reterr = gondulapi.InternalError
+	report = gondulapi.Report{}
+	report.Headers = make(map[string]string)
+	report.Headers["Cache-Control"] = "max-age=1"
 	if DB == nil {
 		log.Errorf("Tried to issue SelectMany() without a DB object")
-		return gondulapi.InternalError
+		return
 	}
 	dval := reflect.ValueOf(d)
 	// This is needed because we need to be able to update with a
 	// potentially new slice.
 	if dval.Kind() != reflect.Ptr {
 		log.Errorf("SelectMany() called with non-pointer interface. This wouldn't really work. Got %T", d)
-		return gondulapi.InternalError
+		return
 	}
 	dval = reflect.Indirect(dval)
 
@@ -145,12 +150,12 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) error {
 	// And obviously it needs to actually be a slice.
 	if dval.Kind() != reflect.Slice {
 		log.Errorf("SelectMany() must be called with pointer-to-slice, e.g: &[]foo, got: %T inner is: %v / %#v / %s / kind: %s", d, dval, dval, dval, dval.Kind())
-		return gondulapi.InternalError
+		return
 	}
 
-	search, err := buildSearch(searcher...)
-	if err != nil {
-		return err
+	search, reterr := buildSearch(searcher...)
+	if reterr != nil {
+		return
 	}
 	// st stores the type we need to return an array, while fieldList
 	// stores the actual base element. Usually, they are the same,
@@ -173,7 +178,7 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) error {
 	kvs, err := enumerate(haystacks, true, &sampleUnderscoreRaw)
 	if err != nil {
 		log.WithError(err).Errorf("enumerate() failed during query. This is bad.")
-		return gondulapi.InternalError
+		return
 	}
 	for idx := range kvs.keys {
 		keys = fmt.Sprintf("%s%s%s", keys, comma, kvs.keys[idx])
@@ -185,7 +190,7 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) error {
 	rows, err := DB.Query(q, searcharr...)
 	if err != nil {
 		log.WithError(err).WithField("query", q).Info("Select(): SELECT failed on DB.Query")
-		return gondulapi.InternalError
+		return
 	}
 	defer func() {
 		rows.Close()
@@ -200,9 +205,10 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) error {
 		err = rows.Scan(kvs.newvals...)
 		if err != nil {
 			log.WithError(err).WithField("query", q).Info("Select(): SELECT failed to scan")
-			return gondulapi.InternalError
+			return
 		}
 		log.Tracef("SELECT(): Record found and scanned.")
+		report.Ok++
 
 		// Create the new slice element
 		newidx := reflect.New(st)
@@ -228,7 +234,8 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) error {
 	// Finally - store the new slice to the pointer provided as input
 	setthis := reflect.Indirect(reflect.ValueOf(d))
 	setthis.Set(retv)
-	return nil
+	reterr =  nil
+	return
 }
 
 // Exists checks if a row where haystack matches the needle exists on the
@@ -261,27 +268,6 @@ func Exists(table string, searcher ...interface{}) (found bool, err error) {
 	return
 }
 
-// Get is a convenience-wrapper for Select that return suitable
-// gondulapi-errors if the needle is the Zero-value, if the database-query
-// fails or if the item isn't found.
-//
-// It is provided so callers can implement receiver.Getter by simply
-// calling this to get reasonable default-behavior.
-/*func Get(needle interface{}, haystack string, table string, item interface{}) error {
-	value := reflect.ValueOf(needle)
-	if value.IsZero() {
-		return gondulapi.Errorf(400, "No item to look for provided")
-	}
-	found, err := Select([]Selector{{haystack,"=",needle}}, table, item)
-	if err != nil {
-		return gondulapi.InternalError
-	}
-	if !found {
-		return gondulapi.Errorf(404, "Couldn't find item %v", needle)
-	}
-	return nil
-}*/
-
 func buildSearch(searcher ...interface{}) ([]Selector, error) {
 	var search []Selector
 	if len(searcher) == 0 {
@@ -296,13 +282,23 @@ func buildSearch(searcher ...interface{}) ([]Selector, error) {
 	}
 	return search, nil
 }
-func Get(item interface{}, table string, searcher ...interface{}) error {
-	found, err := Select(item, table, searcher...)
+
+// Get is a convenience-wrapper for Select that return suitable
+// gondulapi-errors if the needle is the Zero-value, if the database-query
+// fails or if the item isn't found.
+//
+// It is provided so callers can implement receiver.Getter by simply
+// calling this to get reasonable default-behavior.
+func Get(item interface{}, table string, searcher ...interface{}) (gondulapi.Report, error) {
+	report  := gondulapi.Report{}
+	report, err := Select(item, table, searcher...)
+	report.Headers  =  make(map[string]string)
+	report.Headers["Cache-Control"] = "max-age=1"
 	if err != nil {
-		return gondulapi.InternalError
+		return report, gondulapi.InternalError
 	}
-	if !found {
-		return gondulapi.Errorf(404, "Couldn't find item ")
+	if report.Ok == 0 {
+		return report, gondulapi.Errorf(404, "Couldn't find item ")
 	}
-	return nil
+	return report, nil
 }

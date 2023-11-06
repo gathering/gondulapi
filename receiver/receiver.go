@@ -47,6 +47,7 @@ type input struct {
 type output struct {
 	code         int
 	data         interface{}
+	headers	     map[string]string
 	cachecontrol string
 }
 
@@ -125,6 +126,7 @@ func message(str string, v ...interface{}) (m struct {
 // PUT and POST it also parses the input data.
 func handle(item interface{}, input input, path string) (output output) {
 	output.code = 200
+	output.headers = make(map[string]string)
 	var report gondulapi.Report
 	var err error
 	defer func() {
@@ -157,11 +159,13 @@ func handle(item interface{}, input input, path string) (output output) {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
 			return
 		}
-		err = get.Get(input.url.Path[len(path):])
+		report, err = get.Get(input.url.Path[len(path):])
+		log.Printf("GET err;  %v", err)
 		if err != nil {
 			return
 		}
 		output.data = get
+		output.headers = report.Headers
 	} else if input.method == "PUT" {
 		err = json.Unmarshal(input.data, &item)
 		if err != nil {
@@ -220,7 +224,10 @@ func checkAuth(item interface{}, r *http.Request, rcvr receiver) (output, error)
 
 	err := auth.Auth(rcvr.path, r.URL.Path[len(rcvr.path):], r.Method, user, pass)
 	if err != nil {
-		return output{401, "damn", "no-cache"}, err
+		o := output{}
+		o.code = 401
+		o.data = "damn"
+		return o, err
 	}
 	return output{}, nil
 }

@@ -46,7 +46,7 @@ func init() {
 	receiver.AddHandler("/oplog", func() interface{} { return &Oplogs{} })
 }
 
-func (o *Oplog) Get(element string) error {
+func (o *Oplog) Get(element string) (gondulapi.Report, error) {
 	return db.Get(o, "oplog", "id", "=", element)
 }
 
@@ -89,6 +89,6 @@ func (o Oplog) Delete(element string) (gondulapi.Report, error) {
 
 // Get multiple switches. Relies on s being a pointer to an array of
 // structs (which it is).
-func (os *Oplogs) Get(element string) error {
+func (os *Oplogs) Get(element string) (gondulapi.Report, error) {
 	return db.SelectMany(os, "oplog")
 }

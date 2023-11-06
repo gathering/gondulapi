@@ -60,7 +60,7 @@ func init() {
 // Get a single switch from the database and return it. db.Get is a
 // convenience that returns 404 if it doesn't exist and 400 if element is
 // blank.
-func (s *Switch) Get(element string) error {
+func (s *Switch) Get(element string) (gondulapi.Report, error) {
 	return db.Get(s, "switches", "sysname", "=", element)
 }
 
@@ -108,7 +108,7 @@ func (s Switch) Delete(element string) (gondulapi.Report, error) {
 
 // Get multiple switches. Relies on s being a pointer to an array of
 // structs (which it is).
-func (s *Switches) Get(element string) error {
+func (s *Switches) Get(element string) (gondulapi.Report, error) {
 	return db.SelectMany(s, "switches")
 }
 
