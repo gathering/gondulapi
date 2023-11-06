@@ -68,6 +68,7 @@ func Connect() error {
 	driver := gapi.Config.Driver
 	if driver == "" {
 		driver = "postgres"
+		gapi.Config.Driver = "postgres"
 	}
 	DB, err = sql.Open(driver, gapi.Config.ConnectionString)
 	if err != nil {

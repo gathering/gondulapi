@@ -94,8 +94,13 @@ func buildWhere(offset int, search []Selector) (string, []interface{}) {
 	strsearch := ""
 	searcharr := make([]interface{}, 0)
 	tmpand := ""
+	driver := gondulapi.Config.Driver
 	for idx, item := range search {
-		strsearch = fmt.Sprintf("%s %s %s %s $%d", strsearch, tmpand, item.Haystack, item.Operator, offset+idx+1)
+		if driver == "postgres" {
+			strsearch = fmt.Sprintf("%s %s %s %s $%d", strsearch, tmpand, item.Haystack, item.Operator, offset+idx+1)
+		} else {
+			strsearch = fmt.Sprintf("%s %s %s %s ?", strsearch, tmpand, item.Haystack, item.Operator)
+		}
 		tmpand = " AND "
 		searcharr = append(searcharr, item.Needle)
 	}

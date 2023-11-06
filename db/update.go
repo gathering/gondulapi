@@ -133,8 +133,13 @@ func Update(d interface{}, table string, searcher ...interface{}) (gondulapi.Rep
 	lead := fmt.Sprintf("UPDATE %s SET ", table)
 	comma := ""
 	last := 0
+	driver := gondulapi.Config.Driver
 	for idx := range kvs.keys {
-		lead = fmt.Sprintf("%s%s%s = $%d", lead, comma, kvs.keys[idx], idx+1)
+		if driver == "postgres" {
+			lead = fmt.Sprintf("%s%s%s = $%d", lead, comma, kvs.keys[idx], idx+1)
+		} else {
+			lead = fmt.Sprintf("%s%s%s = ?", lead, comma, kvs.keys[idx])
+		}
 		comma = ", "
 		last = idx
 	}
@@ -173,9 +178,14 @@ func Insert(d interface{}, table string) (gondulapi.Report, error) {
 	lead := fmt.Sprintf("INSERT INTO %s (", table)
 	middle := ""
 	comma := ""
+	driver := gondulapi.Config.Driver
 	for idx := range kvs.keys {
 		lead = fmt.Sprintf("%s%s%s ", lead, comma, kvs.keys[idx])
-		middle = fmt.Sprintf("%s%s$%d ", middle, comma, idx+1)
+		if driver == "postgres" {
+			middle = fmt.Sprintf("%s%s$%d ", middle, comma, idx+1)
+		} else {
+			middle = fmt.Sprintf("%s%s? ", middle, comma)
+		}
 		comma = ", "
 	}
 	lead = fmt.Sprintf("%s) VALUES(%s)", lead, middle)
