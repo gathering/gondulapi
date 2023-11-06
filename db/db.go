@@ -26,6 +26,7 @@ import (
 
 	gapi "github.com/gathering/gondulapi"
 	_ "github.com/lib/pq" // for postgres support
+	_ "github.com/go-sql-driver/mysql" // Imported for side effect/mysql support
 	log "github.com/sirupsen/logrus"
 )
 
@@ -64,7 +65,11 @@ func Connect() error {
 		log.Warn("Using default connection string for debug purposes. Relax, it's a very secure set of credentials.")
 		gapi.Config.ConnectionString = "user=kly password=lolkek dbname=klytest sslmode=disable"
 	}
-	DB, err = sql.Open("postgres", gapi.Config.ConnectionString)
+	driver := gapi.Config.Driver
+	if driver == "" {
+		driver = "postgres"
+	}
+	DB, err = sql.Open(driver, gapi.Config.ConnectionString)
 	if err != nil {
 		log.Warnf("Failed to connect to database: %v", err)
 		return gapi.Error{500, "Failed to connect to database"}

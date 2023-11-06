@@ -35,6 +35,7 @@ var Config struct {
 	HTTPUser         string // username for HTTP basic auth
 	HTTPPw           string // password for HTTP basic auth
 	Debug            bool   // Enables trace-debugging
+	Driver		 string // SQL driver, defaults to postgres
 }
 
 // ParseConfig reads a file and parses it as JSON, assuming it will be a
