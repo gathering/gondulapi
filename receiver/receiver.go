@@ -75,6 +75,7 @@ func (rcvr receiver) answer(w http.ResponseWriter, output output, pretty bool) {
 	etagraw := sha256.Sum256(b)
 	etagstr := hex.EncodeToString(etagraw[:])
 	w.Header().Set("ETag", etagstr)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if code == 204 {
 		return
