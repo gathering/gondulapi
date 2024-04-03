@@ -24,7 +24,7 @@ import (
 	"reflect"
 
 	"github.com/gathering/gondulapi"
-	log "github.com/sirupsen/logrus"
+	"github.com/gathering/gondulapi/log"
 )
 
 // Select populates the provided interface(should be a pointer to a struct)
@@ -55,7 +55,7 @@ func Select(d interface{}, table string, searcher ...interface{}) (report gondul
 	err = gondulapi.InternalError
 	st := reflect.ValueOf(d)
 	if st.Kind() != reflect.Ptr {
-		log.Error("Select() called with non-pointer interface. This wouldn't really work.")
+		log.Printf("Select() called with non-pointer interface. This wouldn't really work.")
 		return
 	}
 	st = reflect.Indirect(st)
@@ -68,7 +68,7 @@ func Select(d interface{}, table string, searcher ...interface{}) (report gondul
 	report, err = SelectMany(&retvi, table, searcher...)
 
 	if err != nil {
-		log.WithError(err).Error("Call to SelectMany() from Select() failed.")
+		log.Printf("Call to SelectMany() from Select() failed: %s", err)
 		return
 	}
 	// retvi will be overwritten with the response (because that's how
@@ -135,14 +135,14 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) (report go
 	report.Headers = make(map[string]string)
 	report.Headers["Cache-Control"] = "max-age=1"
 	if DB == nil {
-		log.Errorf("Tried to issue SelectMany() without a DB object")
+		log.Printf("Tried to issue SelectMany() without a DB object")
 		return
 	}
 	dval := reflect.ValueOf(d)
 	// This is needed because we need to be able to update with a
 	// potentially new slice.
 	if dval.Kind() != reflect.Ptr {
-		log.Errorf("SelectMany() called with non-pointer interface. This wouldn't really work. Got %T", d)
+		log.Printf("SelectMany() called with non-pointer interface. This wouldn't really work. Got %T", d)
 		return
 	}
 	dval = reflect.Indirect(dval)
@@ -154,7 +154,7 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) (report go
 	}
 	// And obviously it needs to actually be a slice.
 	if dval.Kind() != reflect.Slice {
-		log.Errorf("SelectMany() must be called with pointer-to-slice, e.g: &[]foo, got: %T inner is: %v / %#v / %s / kind: %s", d, dval, dval, dval, dval.Kind())
+		log.Printf("SelectMany() must be called with pointer-to-slice, e.g: &[]foo, got: %T inner is: %v / %#v / %s / kind: %s", d, dval, dval, dval, dval.Kind())
 		return
 	}
 
@@ -182,7 +182,7 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) (report go
 	haystacks := make(map[string]bool, 0)
 	kvs, err := enumerate(haystacks, true, &sampleUnderscoreRaw)
 	if err != nil {
-		log.WithError(err).Errorf("enumerate() failed during query. This is bad.")
+		log.Printf("enumerate() failed during query. This is bad. Error: %s", err)
 		return
 	}
 	for idx := range kvs.keys {
@@ -191,10 +191,9 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) (report go
 	}
 	strsearch, searcharr := buildWhere(0, search)
 	q := fmt.Sprintf("SELECT %s FROM %s WHERE %s", keys, table, strsearch)
-	log.WithField("query", q).Tracef("Select()")
 	rows, err := DB.Query(q, searcharr...)
 	if err != nil {
-		log.WithError(err).WithField("query", q).Info("Select(): SELECT failed on DB.Query")
+		log.Printf("query failed: %s returned %s", q, err)
 		return
 	}
 	defer func() {
@@ -209,10 +208,9 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) (report go
 		}
 		err = rows.Scan(kvs.newvals...)
 		if err != nil {
-			log.WithError(err).WithField("query", q).Info("Select(): SELECT failed to scan")
+			log.Printf("unable to Scan() row for query %s: %s", q, err)
 			return
 		}
-		log.Tracef("SELECT(): Record found and scanned.")
 		report.Ok++
 
 		// Create the new slice element
@@ -250,14 +248,14 @@ func SelectMany(d interface{}, table string, searcher ...interface{}) (report go
 func Exists(table string, searcher ...interface{}) (found bool, err error) {
 	search, err := buildSearch(searcher...)
 	if err != nil {
-		log.WithError(err).Error("Exists(): failed, unable to build search")
+		log.Printf("Unable to build search: %s", err)
 		return false, gondulapi.InternalError
 	}
 	searchstr, searcharr := buildWhere(0, search)
 	q := fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT 1", table, searchstr)
 	rows, err := DB.Query(q, searcharr...)
 	if err != nil {
-		log.WithError(err).WithField("query", q).Info("Exists(): SELECT failed")
+		log.Printf("unable to test for existence, query failed: %s: %s", q, err)
 		return false, gondulapi.InternalError
 	}
 	defer func() {

@@ -31,8 +31,8 @@ import (
 	"strings"
 
 	"github.com/gathering/gondulapi"
+	"github.com/gathering/gondulapi/log"
 
-	log "github.com/sirupsen/logrus"
 )
 
 var handles map[string]Allocator
@@ -91,21 +91,13 @@ func (rcvr receiver) get(w http.ResponseWriter, r *http.Request) (input, error) 
 	var input input
 	input.url = r.URL
 	input.method = r.Method
-	log.WithFields(log.Fields{
-		"url":     r.URL,
-		"method":  r.Method,
-		"address": r.RemoteAddr,
-	}).Infof("Request")
+	log.Printf("%s %s remote: %v", r.Method, r.URL, r.RemoteAddr)
 
 	if r.ContentLength != 0 {
 		input.data = make([]byte, r.ContentLength)
 
 		if n, err := io.ReadFull(r.Body, input.data); err != nil {
-			log.WithFields(log.Fields{
-				"address":  r.RemoteAddr,
-				"error":    err,
-				"numbytes": n,
-			}).Error("Read error from client")
+			log.Printf("Read error from client. Read %d bytes. Remote: %v. error: %s", n, r.RemoteAddr, err)
 			return input, fmt.Errorf("read failed: %v", err)
 		}
 	}
@@ -131,11 +123,6 @@ func handle(item interface{}, input input, path string) (output output) {
 	var report gondulapi.Report
 	var err error
 	defer func() {
-		log.WithFields(log.Fields{
-			"output.code": output.code,
-			"output.data": output.data,
-			"error":       err,
-		}).Trace("Request handled")
 		gerr, havegerr := err.(gondulapi.Error)
 		if err != nil && report.Error == nil {
 			report.Error = err
@@ -171,7 +158,7 @@ func handle(item interface{}, input input, path string) (output output) {
 		err = json.Unmarshal(input.data, &item)
 		if err != nil {
 			return
-		}
+	}
 		put, ok := item.(gondulapi.Putter)
 		if !ok {
 			output.data = message("%s on %s failed: No such method for this path", input.method, path)
@@ -239,13 +226,13 @@ func checkAuth(item interface{}, r *http.Request, rcvr receiver) (output, error)
 // that data and replies. All input/output is valid JSON.
 func (rcvr receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	input, err := rcvr.get(w, r)
-	log.WithFields(log.Fields{
-		"data": string(input.data),
-		"err":  err,
-	}).Trace("Got")
 	pretty := len(input.url.Query()["pretty"]) > 0
 	item := rcvr.alloc()
+	if err != nil {
+		log.Printf("go receiver error: %s", err)
+	}
 	if output, err := checkAuth(item, r, rcvr); err != nil {
+		log.Printf("auth error: %s", err)
 		rcvr.answer(w, output, pretty)
 		return
 	}

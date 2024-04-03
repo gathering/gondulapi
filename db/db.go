@@ -27,7 +27,7 @@ import (
 	gapi "github.com/gathering/gondulapi"
 	_ "github.com/lib/pq" // for postgres support
 	_ "github.com/go-sql-driver/mysql" // Imported for side effect/mysql support
-	log "github.com/sirupsen/logrus"
+	"github.com/gathering/gondulapi/log"
 )
 
 // DB is the main database handle used throughout the API
@@ -38,7 +38,7 @@ var DB *sql.DB
 // be exposed to users.
 func Ping() error {
 	if DB == nil {
-		log.Warn("Ping() issued without a valid DB. Use Connect() first.")
+		log.Printf("Ping() issued without a valid DB. Use Connect() first.")
 		return gapi.Error{500, "Failed to communicate with the database"}
 	}
 	err := DB.Ping()
@@ -57,12 +57,12 @@ func Connect() error {
 	// Mainly allowed because testing can easily trigger multiple
 	// connects.
 	if DB != nil {
-		log.Warn("Got superfluous db.Connect(). Running a ping and hoping for the best.")
+		log.Printf("Got superfluous db.Connect(). Running a ping and hoping for the best.")
 		return Ping()
 	}
 
 	if gapi.Config.ConnectionString == "" {
-		log.Warn("Using default connection string for debug purposes. Relax, it's a very secure set of credentials.")
+		log.Printf("Using default connection string for debug purposes. Relax, it's a very secure set of credentials.")
 		gapi.Config.ConnectionString = "user=kly password=lolkek dbname=klytest sslmode=disable"
 	}
 	driver := gapi.Config.Driver
@@ -72,7 +72,7 @@ func Connect() error {
 	}
 	DB, err = sql.Open(driver, gapi.Config.ConnectionString)
 	if err != nil {
-		log.Warnf("Failed to connect to database: %v", err)
+		log.Printf("Failed to connect to database: %v", err)
 		return gapi.Error{500, "Failed to connect to database"}
 	}
 	return Ping()

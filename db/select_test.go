@@ -25,12 +25,7 @@ import (
 	"github.com/gathering/gondulapi/db"
 	h "github.com/gathering/gondulapi/helper"
 	"github.com/gathering/gondulapi/types"
-	log "github.com/sirupsen/logrus"
 )
-
-func init() {
-	log.SetLevel(log.TraceLevel)
-}
 
 // system is not completely random. Having Ignored in the middle is
 // important to properly test ignored fields and the accounting, which has

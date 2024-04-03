@@ -26,7 +26,7 @@ import (
 	"github.com/gathering/gondulapi/db"
 	"github.com/gathering/gondulapi/receiver"
 	"github.com/gathering/gondulapi/types"
-	log "github.com/sirupsen/logrus"
+	"github.com/gathering/gondulapi/log"
 )
 
 // Switch represents a single switch, or box. It can be updated in bulk or
@@ -119,7 +119,7 @@ func (s Switches) Post() (gondulapi.Report, error) {
 	for idx := range sn {
 		report, err := sn[idx].Post()
 		if err != nil {
-			log.WithError(err).Printf("Single-item failed, but moving on with switch-update")
+			log.Printf("Single-item failed, but moving on with switch-update: %s", err)
 			ret.Failed++
 		} else {
 			ret.Ok++

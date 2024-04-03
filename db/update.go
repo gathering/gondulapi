@@ -52,7 +52,7 @@ import (
 	"unicode"
 
 	"github.com/gathering/gondulapi"
-	log "github.com/sirupsen/logrus"
+	"github.com/gathering/gondulapi/log"
 )
 
 type keyvals struct {
@@ -126,7 +126,7 @@ func Update(d interface{}, table string, searcher ...interface{}) (gondulapi.Rep
 	}
 	kvs, err := enumerate(haystacks, false, d)
 	if err != nil {
-		log.WithError(err).Error("Update(): enumerate() failed")
+		log.Printf("enumerate() failed: %s", err)
 		report.Failed++
 		return report, gondulapi.InternalError
 	}
@@ -150,7 +150,7 @@ func Update(d interface{}, table string, searcher ...interface{}) (gondulapi.Rep
 	}
 	res, err := DB.Exec(lead, kvs.values...)
 	if err != nil {
-		log.WithError(err).WithField("lead", lead).Error("Update(): EXEC failed")
+		log.Printf("Failed to execute query %s: %s", lead, err)
 		report.Failed++
 		return report, gondulapi.InternalError
 	}
@@ -171,7 +171,7 @@ func Insert(d interface{}, table string) (gondulapi.Report, error) {
 	haystacks := make(map[string]bool, 0)
 	kvs, err := enumerate(haystacks, false, d)
 	if err != nil {
-		log.WithError(err).Error("Insert(): Enumerate failed")
+		log.Printf("enumerate failed: %s", err)
 		report.Failed++
 		return report, gondulapi.InternalError
 	}
@@ -191,7 +191,7 @@ func Insert(d interface{}, table string) (gondulapi.Report, error) {
 	lead = fmt.Sprintf("%s) VALUES(%s)", lead, middle)
 	res, err := DB.Exec(lead, kvs.values...)
 	if err != nil {
-		log.WithError(err).WithField("lead", lead).Error("Insert(): EXEC failed")
+		log.Printf("failed to execute query %s: %s", lead, err)
 		return report, gondulapi.InternalError
 	}
 	rowsaf, _ := res.RowsAffected()
@@ -237,7 +237,7 @@ func Delete(table string, searcher ...interface{}) (gondulapi.Report, error) {
 	res, err := DB.Exec(q, searcharr...)
 	if err != nil {
 		report.Failed++
-		log.WithError(err).WithField("query", q).Error("Delete(): Query failed")
+		log.Printf("Unable to execute query %s: %s", q, err)
 		return report, gondulapi.InternalError
 	}
 	rowsaf, _ := res.RowsAffected()

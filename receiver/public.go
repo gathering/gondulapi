@@ -46,7 +46,7 @@ import (
 	"net/http"
 
 	gapi "github.com/gathering/gondulapi"
-	log "github.com/sirupsen/logrus"
+	"github.com/gathering/gondulapi/log"
 )
 
 // AddHandler registeres an allocator/data structure with a url. The
@@ -83,6 +83,6 @@ func Start() {
 	} else {
 		server.Addr = gapi.Config.ListenAddress
 	}
-	log.WithField("address", server.Addr).Info("Starting http receiver")
+	log.Printf("Starting HTTP receiver on %s", server.Addr)
 	log.Fatal(server.ListenAndServe())
 }

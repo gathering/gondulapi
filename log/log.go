@@ -53,18 +53,20 @@ func Init() {
 	} else {
 		d.SetFlags(log.Ltime)
 	}
-
+}
+func init() {
+	Init()
 }
 
-func Log(v ...any) {
+func Print(v ...any) {
 	log.Output(2, fmt.Sprint(v...))
 }
 
-func Logf(format string, v ...any) {
+func Printf(format string, v ...any) {
 	log.Output(2, fmt.Sprintf(format, v...))
 }
 
-func Logln(v ...any) {
+func Println(v ...any) {
 	log.Output(2, fmt.Sprintln(v...))
 }
 
@@ -96,6 +98,24 @@ func Debugf(format string, v ...any) {
 }
 
 func Debugln(v ...any) {
+	if Verbose {
+		log.Output(2, fmt.Sprintln(v...))
+	}
+}
+
+func Trace(v ...any) {
+	if Verbose {
+		log.Output(2, fmt.Sprint(v...))
+	}
+}
+
+func Tracef(format string, v ...any) {
+	if Verbose {
+		log.Output(2, fmt.Sprintf(format, v...))
+	}
+}
+
+func Traceln(v ...any) {
 	if Verbose {
 		log.Output(2, fmt.Sprintln(v...))
 	}

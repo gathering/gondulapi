@@ -36,7 +36,7 @@ import (
 	"github.com/gathering/gondulapi/auth"
 	"github.com/gathering/gondulapi/db"
 	"github.com/gathering/gondulapi/receiver"
-	log "github.com/sirupsen/logrus"
+	"github.com/gathering/gondulapi/log"
 )
 
 // Test is a single test(result), with all relevant descriptions. It is
