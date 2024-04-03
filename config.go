@@ -22,8 +22,8 @@ package gondulapi
 import (
 	"encoding/json"
 	"io/ioutil"
-
-	log "github.com/sirupsen/logrus"
+	"fmt"
+	"github.com/gathering/gondulapi/log"
 )
 
 // Config covers global configuration, and if need be it will provide
@@ -43,16 +43,11 @@ var Config struct {
 func ParseConfig(file string) error {
 	dat, err := ioutil.ReadFile(file)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to read config file")
-		return Error{500, "Failed to read config file"}
+		return fmt.Errorf("Failed to read config file: %w", err)
 	}
 	if err := json.Unmarshal(dat, &Config); err != nil {
-		log.WithError(err).Fatal("Failed to parse config file")
-		return err
+		return fmt.Errorf("Failed to parse config file: %w", err)
 	}
-	log.Tracef("Parsed config file as %v", Config)
-	if Config.Debug {
-		log.SetLevel(log.TraceLevel)
-	}
+	log.Debugf("Parsed config file as %v", Config)
 	return nil
 }
