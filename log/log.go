@@ -30,7 +30,7 @@ regular calls to log without having to worry about future-proofing it.
 Add wrappers on demand.
 
 The one concession it has is that it adds Debug/Debugf which evaluates if
-we've turned on debugging. This makes calls to svipul.Debug() very fast
+we've turned on debugging. This makes calls to Debug() very fast
 when it's disabled. This makes it unproblematic to add debug-logging in
 high-traffic code that would otherwise risk slowing down regular
 non-debugging code.
