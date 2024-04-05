@@ -44,6 +44,7 @@ package receiver
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	gapi "github.com/gathering/gondulapi"
 	"github.com/gathering/gondulapi/log"
@@ -63,6 +64,27 @@ func AddHandler(url string, a Allocator) {
 // one of Getter, Putter, Poster or Deleter from gondulapi.
 type Allocator func() interface{}
 
+func findInterfaces(item interface{}) string {
+	s := make([]string,0)
+	_, ok := item.(gapi.Getter)
+	if ok {
+		s = append(s, "GET")
+	}
+	_, ok = item.(gapi.Putter)
+	if ok {
+		s = append(s, "PUT")
+	}
+	_, ok = item.(gapi.Poster)
+	if ok {
+		s = append(s, "POST")
+	}
+	_, ok = item.(gapi.Deleter)
+	if ok {
+		s = append(s, "DELETE")
+	}
+	return strings.Join(s, " ")
+
+}
 // Start a net/http server and handle all requests registered. Never
 // returns.
 func Start() {
@@ -74,7 +96,8 @@ func Start() {
 	}
 	for idx, h := range handles {
 		target := fmt.Sprintf("%s%s", gapi.Config.Prefix, idx)
-		log.Printf("Listening for %v (%T)\n", target, h())
+		s := findInterfaces(h())
+		log.Printf("Listening for %v (%T) - %s\n", target, h(), s)
 		serveMux.Handle(target, receiver{alloc: h, path: target})
 	}
 	if gapi.Config.ListenAddress == "" {
