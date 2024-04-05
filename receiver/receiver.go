@@ -148,8 +148,8 @@ func handle(item interface{}, input input, path string) (output output) {
 			return
 		}
 		report, err = get.Get(input.url.Path[len(path):])
-		log.Printf("GET err;  %v", err)
 		if err != nil {
+			log.Printf("GET method returned error: %v", err)
 			return
 		}
 		output.data = get
